@@ -5,7 +5,7 @@ This web tool has been developed to enable scientists and researchers to view an
 
 A pipeline has been developed to convert EM datasets (.mrc format, or image slices) to the precomputed neuroglancer format. There are two pathways:
 
-1) MRC file for the image available with a list of molecules and their position/rotations. Other values like cc can be in this table. If a .obj or .mrc file is available for the individual molecules, it will be used to create duplicated objects at the correct position/rotation. Resulting data structures is <TODO>.
+1) MRC file for the image available with a list of molecules and their position/rotations. Other values like cc can be in this table. If a .obj or .mrc file is available for the individual molecules, it will be used to create duplicated objects at the correct position/rotation. Resulting data structures is ---TODO---.
   
 2) MRC file for the image, as well as a class mask as MRC. This will result in a segmentation layer for each type of class found in the file, with its individual object meshes calculated from the segmentation file. At the current stage, this does not support additional values like cc.
   
@@ -20,8 +20,8 @@ App specific enhancements not found in vanilla neuroglancer:
   
   
 Local installation to view generated files:
-  <TODO>
+  ---TODO---
          
 Setup and use Preprocessing Pipelines:
-  <TODO>
+  ---TODO---
 
