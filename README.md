@@ -19,3 +19,9 @@ App specific enhancements not found in vanilla neuroglancer:
   5) Create a group of meshes by selecting them - they will be added to a new layer
   
   
+Local installation to view generated files:
+  <TODO>
+         
+Setup and use Preprocessing Pipelines:
+  <TODO>
+
