@@ -26,4 +26,5 @@ Please look at the two examples to understand the required folder structure. The
 
 
 To run:
-  bash ./pipeline.sh -p path/to/folder/containing/mrcFile
+
+    bash ./pipeline.sh -p path/to/folder/containing/mrcFile
