@@ -1,27 +1,29 @@
-# IMP_Webtool
-Building on neuroglancer, enables viewing and interacting with EM data.
+# IMP_Preprocessing
 
-This web tool has been developed to enable scientists and researchers to view and interact with their EM data. Building on https://github.com/google/neuroglancer , large scale datasets can be viewed quickly in the browser.
+These pipeline has been developed to convert EM datasets (.mrc format, or image slices) to the precomputed neuroglancer format. There are two pathways:
 
-A pipeline has been developed to convert EM datasets (.mrc format, or image slices) to the precomputed neuroglancer format. There are two pathways:
-
-1) MRC file for the image available with a list of molecules and their position/rotations. Other values like cc can be in this table. If a .obj or .mrc file is available for the individual molecules, it will be used to create duplicated objects at the correct position/rotation. Resulting data structures is ---TODO---.
+1) MRC file for the image available with a list of molecules and their position/rotations. Other values like cc can be in this table. If a .obj or .mrc file is available for the individual molecules, it will be used to create duplicated objects at the correct position/rotation. 
   
 2) MRC file for the image, as well as a class mask as MRC. This will result in a segmentation layer for each type of class found in the file, with its individual object meshes calculated from the segmentation file. At the current stage, this does not support additional values like cc.
-  
-  
-App specific enhancements not found in vanilla neuroglancer:
-  
-  1) change colourmap online
-  2) change value by which to colour online, this will apply for segments and annotations
-  3) select a region (currently box shaped) in which to display meshes.
-  4) change colour of an individual mesh easily
-  5) Create a group of meshes by selecting them - they will be added to a new layer
-  
-  
-Local installation to view generated files:
-  ---TODO---
-         
-Setup and use Preprocessing Pipelines:
-  ---TODO---
 
+Both ways result in a folder of ...path.../bucket/dataset/
+The contents of this folder will be hosted either locally on your computer for access with local neuroglancer, ot on the web app for which the database has to be updated - It will be possible to do this step some time in the future.
+  
+
+<h4>Requirements</h4>
+<h5>OS</h5>
+Linux. WSL on windows works. MAC untested.
+
+<h5>Software</h5>
+<ul>
+  <li>The functions **mrc2tif** and **newstack** from [imod](https://bio3d.colorado.edu/imod/download.html) are used.</li>
+  <li>Python 3 and Anaconda</li>
+  <li>The required packages are bundled in the conda environment found in **environment.yml**</li>
+</ul>
+
+Folder structure:
+Please look at the two examples to understand the required folder structure. The two images below also illustrate the structure.
+
+
+To run:
+  bash ./pipeline.sh -p path/to/folder/containing/mrcFile
