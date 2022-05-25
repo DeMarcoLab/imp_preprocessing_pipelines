@@ -15,16 +15,15 @@ The contents of this folder will be hosted either locally on your computer for a
 Linux. WSL on windows works. MAC untested.
 
 <h5>Software</h5>
-<ul>
-  <li>The functions **mrc2tif** and **newstack** from [imod](https://bio3d.colorado.edu/imod/download.html) are used.</li>
-  <li>Python 3 and Anaconda</li>
-  <li>The required packages are bundled in the conda environment found in **environment.yml**</li>
-</ul>
 
-Folder structure:
+- The functions **mrc2tif** and **newstack** from ***[imod](https://bio3d.colorado.edu/imod/download.html)*** are used.</li>
+- Python 3 and Anaconda</li>
+- The required packages are bundled in the conda environment found in **environment.yml**</li>
+
+<h5>Folder structure</h5>
 Please look at the two examples to understand the required folder structure. The two images below also illustrate the structure.
 
 
-To run:
+<h5>To run</h5>
 
     bash ./pipeline.sh -p path/to/folder/containing/mrcFile
