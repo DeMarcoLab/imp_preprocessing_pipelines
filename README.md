@@ -12,13 +12,15 @@ The contents of this folder will be hosted either locally on your computer for a
 
 <h4>Requirements</h4>
 <h5>OS</h5>
-Linux. WSL on windows works. MAC untested.
+Linux, MAC.
+WSL on Windows works, however you need to keep to the WSL file system when serving the files (and copying them to the server). Else the : in some file names will pose a problem on Windows.
 
 <h5>Software</h5>
 
-- The functions **mrc2tif** and **newstack** from ***[imod](https://bio3d.colorado.edu/imod/download.html)*** are used.</li>
-- Python 3 and Anaconda</li>
-- The required packages are bundled in the conda environment found in **environment.yml**</li>
+- The functions **mrc2tif** and **newstack** from ***[imod](https://bio3d.colorado.edu/imod/download.html)*** are used.
+- [pyMesh](https://github.com/PyMesh/PyMesh) for the object to mesh pipeline
+- Python 3 and Anaconda
+- The required packages are bundled in the conda environment found in **environment.yml**
 
 <h5>Folder structure</h5>
 Please look at the two examples to understand the required folder structure. The two images below also illustrate the structure.
