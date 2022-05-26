@@ -10,17 +10,21 @@ Both ways result in a folder of ...path.../bucket/dataset/
 The contents of this folder will be hosted either locally on your computer for access with local neuroglancer, ot on the web app for which the database has to be updated - It will be possible to do this step some time in the future.
   
 
-<h4>Requirements</h4>
-<h5>OS</h5>
+<h4>OS Requirement</h4>
 Linux, MAC.
 WSL on Windows works, however you need to keep to the WSL file system when serving the files (and copying them to the server). Else the : in some file names will pose a problem on Windows.
 
-<h5>Software</h5>
+<h4>Software Requirements</h4>
 
 - The functions **mrc2tif** and **newstack** from ***[imod](https://bio3d.colorado.edu/imod/download.html)*** are used.
-- [pyMesh](https://github.com/PyMesh/PyMesh) for the object to mesh pipeline
 - Python 3 and Anaconda
 - The required packages are bundled in the conda environment found in **environment.yml**
+
+<h5>For object mesh creation</h5>
+
+- cmake with all dependencies
+- [pyMesh](https://github.com/PyMesh/PyMesh) for the object to mesh pipeline
+- [multiresoultion-mesh-creator](https://github.com/davidackerman/multiresolution-mesh-creator)
 
 <h5>Folder structure</h5>
 Please look at the two examples to understand the required folder structure. The two images below also illustrate the structure.
