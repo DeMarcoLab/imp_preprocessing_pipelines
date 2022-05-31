@@ -1,0 +1,13 @@
+# Ignore Mac system files
+**/.DS_Store
+
+#ignore output folders
+**/bucket/
+**/image_slices/
+**/objects/
+**/splitClassmask/
+**/flipped.mrc
+
+#ignore input files - to be made available elsewhere
+**/clean_model_0.mrc 
+**/class_mask.mrc
