@@ -2,10 +2,10 @@
 **/.DS_Store
 
 #ignore output folders
-**/bucket/
-**/image_slices/
-**/objects/
-**/splitClassmask/
+**/bucket/*
+**/image_slices/*
+**/objects/*
+**/splitClassmask/*
 **/flipped.mrc
 
 #ignore input files - to be made available elsewhere
