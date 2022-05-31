@@ -4,7 +4,7 @@ These pipeline has been developed to convert EM datasets (.mrc format, or image 
 
 1) MRC file for the image available with a list of molecules and their position/rotations. Other values like cc can be in this table. If a .obj or .mrc file is available for the individual molecules, it will be used to create duplicated objects at the correct position/rotation. 
   
-2) MRC file for the image, as well as a class mask as MRC. This will result in a segmentation layer for each type of class found in the file, with its individual object meshes calculated from the segmentation file. At the current stage, this does not support additional values like cc.
+2) MRC file for the image, as well as a class mask as MRC. This will result in a segmentation layer for each type of class found in the file, with its individual object meshes calculated from the segmentation file. At the current stage, this does not support additional values like cc, and does not have the interactive functionalities like grouping, display meshes in an area etc. This can be used for viewing.
 
 Both ways result in a folder of ...path.../bucket/dataset/
 The contents of this folder will be hosted either locally on your computer for access with local neuroglancer, ot on the web app for which the database has to be updated - It will be possible to do this step some time in the future.
