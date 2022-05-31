@@ -90,6 +90,9 @@ mrc_files = [f for f in os.listdir(basepath+"/templates/") if isfile(join(basepa
 #print(mrc_files)
 #delete previous output folder if it exists
 print(" Starting multiplication of objects using coordinates/rotations ... ")
+if(os.path.exists(basepath+"/objects/")):
+    shutil.rmtree(basepath+"/objects/")
+os.makedirs(basepath+"/objects/")
 for f in mrc_files:
  
     if(".mrc" not in f):
@@ -127,6 +130,7 @@ for f in mrc_files:
     #go through csv file. column ID should match file name
     #column name will be used for readable folder names.
     #print(g)
+    #os.makedirs(basepath+"/objects/")
     for index, row in df.iterrows():
         if(g not in row["id"] ):  #find the matching rows for the given mrc file
             continue

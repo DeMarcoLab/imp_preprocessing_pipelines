@@ -37,21 +37,21 @@ do
     clip flipz $i "${mypath}/flipped.mrc"
     mrc2tif "${mypath}/flipped.mrc" "${mypath}/image_slices/img"
 
-    # mkdir -p "${mypath}/bucket/dataset/image"
+    mkdir -p "${mypath}/bucket/dataset/image"
 
     
     #extract header information and convert slices to precomputed using that information   
-    #python extract_header.py -i $i -s "False"
+    python extract_header.py -i $i -s "False"
     
     #convert annotation layer
-    # mkdir -p "${mypath}/bucket/dataset/coordinates/"
-    # python annotation_layer_conversion.py -i "${mypath}/annotations/particles.csv" -o  "${mypath}/bucket/dataset/coordinates/"
+    mkdir -p "${mypath}/bucket/dataset/coordinates/"
+    python annotation_layer_conversion.py -i "${mypath}/annotations/particles.csv" -o  "${mypath}/bucket/dataset/coordinates/"
 
-    # #take mrc volume template and multiply it while translating/rotation. 
-    # #Writes many obj files in named folder inside new folder objects
-    # python multiplyObjects2.py "${mypath}/" "${mypath}/annotations/particles.csv"
-    # #convert the many obj files to neuroglancer readable format
-    # sh ./create_neuroglancer_meshes.sh "${mypath}"
+    #take mrc volume template and multiply it while translating/rotation. 
+    #Writes many obj files in named folder inside new folder objects
+    python multiplyObjects2.py "${mypath}/" "${mypath}/annotations/particles.csv"
+    #convert the many obj files to neuroglancer readable format
+    sh ./create_neuroglancer_meshes.sh "${mypath}"
 done
 
 echo "All done in " $SECONDS " seconds."

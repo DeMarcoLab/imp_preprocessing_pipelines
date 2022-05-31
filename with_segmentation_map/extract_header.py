@@ -69,7 +69,7 @@ def main(argv):
     #solution
 
     #convert the image itself
-    os.system("python create_cloudvolume_volume.py " +basepath +"/image_slices " + str(voxelsize[0]) + " " +   str(voxelsize[1]) + " " +   str(voxelsize[2]) + " file://" +basepath+  "/bucket/dataset/image --layer_type image --dtype float32")
+    os.system("python create_cloudvolume_volume.py " +basepath +"/image_slices " + str(voxelsize[0]) + " " +   str(voxelsize[1]) + " " +   str(voxelsize[2]) + " file://" +basepath+  "/bucket/dataset/image --layer_type image --dtype float32 > /dev/null")
     #os.system('python ../image_conversion.py ' + basepath+"/bucket/dataset/image " + basepath+"/image_slices " + str(sx) + " " + str(sy) + " " + str(sz) + " False")
     print("Done converting image data.")
 
@@ -105,7 +105,7 @@ def main(argv):
         os.system("mrc2tif " + directory +"/"+id_+ '_int.mrc ' + directory + "/" +id_+"_int_slices/img > /dev/null")
         
         #create precomputed format
-        os.system("python create_cloudvolume_volume.py " +directory + "/" +id_+"_int_slices/ "   +str(voxelsize[0])+" "+str(voxelsize[1])+" "+str(voxelsize[2])+" file://" +basepath+  "/bucket/dataset/segmentation/"+readable_name +" --layer_type segmentation --dtype uint16")
+        os.system("python create_cloudvolume_volume.py " +directory + "/" +id_+"_int_slices/ "   +str(voxelsize[0])+" "+str(voxelsize[1])+" "+str(voxelsize[2])+" file://" +basepath+  "/bucket/dataset/segmentation/"+readable_name +" --layer_type segmentation --dtype uint16 > /dev/null")
    
         #create mesh files
         os.system('python meshing.py file://'+ basepath+"/bucket/dataset/segmentation/" +  readable_name  +  " " + str(sx) + " " + str(sy) + " " + str(sz))

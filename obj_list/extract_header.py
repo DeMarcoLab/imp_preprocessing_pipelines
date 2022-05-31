@@ -57,7 +57,7 @@ def main(argv):
     print("----")
    
     #create precomputed layer.
-    os.system("python ../create_cloudvolume_volume.py " +basepath +"/image_slices " + str(voxelsize[0]) + " " +   str(voxelsize[1]) + " " +   str(voxelsize[2]) + " file://" +basepath+  "/bucket/dataset/image --layer_type image --dtype float32")
+    os.system("python ./create_cloudvolume_volume.py " +basepath +"/image_slices " + str(voxelsize[0]) + " " +   str(voxelsize[1]) + " " +   str(voxelsize[2]) + " file://" +basepath+  "/bucket/dataset/image --layer_type image --dtype float32")
     
 if __name__ == "__main__":
     main(sys.argv[1:])
