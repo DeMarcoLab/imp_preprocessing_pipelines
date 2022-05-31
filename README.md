@@ -22,8 +22,8 @@ WSL on Windows works, however you need to keep to the WSL file system when servi
 
 <h5>For object mesh creation</h5>
 
-- cmake with all dependencies
-- [pyMesh](https://github.com/PyMesh/PyMesh) for the object to mesh pipeline
+- cmake
+- [pyMesh](https://github.com/PyMesh/PyMesh) for the object to mesh pipeline. This is a bit of pain to install - looking to find alternatives.
 - [multiresoultion-mesh-creator](https://github.com/davidackerman/multiresolution-mesh-creator)
 
 <h5>Folder structure</h5>
