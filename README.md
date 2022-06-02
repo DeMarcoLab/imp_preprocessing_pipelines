@@ -21,9 +21,6 @@ WSL on Windows works, however you need to keep to the WSL file system when servi
 - The required packages are bundled in the conda environment found in **environment.yml**
 
 <h5>For object mesh creation</h5>
-
-- cmake
-- [pyMesh](https://github.com/PyMesh/PyMesh) for the object to mesh pipeline. This is a bit of pain to install - looking to find alternatives.
 - [multiresoultion-mesh-creator](https://github.com/davidackerman/multiresolution-mesh-creator)
 
 <h5>Folder structure</h5>
