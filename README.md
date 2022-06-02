@@ -21,7 +21,8 @@ WSL on Windows works, however you need to keep to the WSL file system when servi
 - The required packages are bundled in the conda environment found in **environment.yml**
 
 <h5>For object mesh creation</h5>
-- ***[multiresoultion-mesh-creator](https://github.com/davidackerman/multiresolution-mesh-creator)***
+<a href="https://github.com/davidackerman/multiresolution-mesh-creator" target="_blank">Mesh creator</a>
+
 
 <h5>For local server</h5>
 A nginx config file to host on localhost is provided. The server has to be able to serve compressed files and overcome a few caveats with the filenames, therefore simplehttpserver wasn't sufficient. 
