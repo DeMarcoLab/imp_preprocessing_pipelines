@@ -1,8 +1,7 @@
 import sys
 import numpy  as np
 import pandas as pd
-import pymesh as pym
-#from vol2mesh import Mesh, concatenate_meshes
+import trimesh
 from scipy.spatial.transform import Rotation as R
 import mrcfile as mrc
 import skimage.measure as skim
@@ -12,7 +11,7 @@ import shutil
 def writeToObjFile(self, pathToObjFile, name):
     objFile = open(pathToObjFile, 'w')
     objFile.write("o " + name + "\n")
-    for vert in self["verts"]:
+    for vert in self["vertices"]:
         objFile.write("v ")
         objFile.write(str(vert[0]))
         objFile.write(" ")
@@ -82,6 +81,8 @@ def makeYamlFiles(path):
     g.write("      interval: 20ms  # time between event loop health checks\n")
     g.write("      limit: 3h       # time allowed before triggering a warning\n")
 
+
+
 # args parsing
 basepath    = sys.argv[1]
 positionlist = sys.argv[2]
@@ -115,22 +116,20 @@ for f in mrc_files:
         for z in range(nz):
             data[x,:,z] = S.data[z,:,x]
     verts, faces, normals, values = skim.marching_cubes(data)
-    newobj = {"verts" : verts, "faces" : faces}
+    newobj = {"vertices" : verts, "faces" : faces}
     obj_name = basepath +"/" + id + ".obj"
-    #print(obj_name)
-    writeToObjFile(newobj, obj_name, id) # probably does not need to be written
-    ori_mesh = pym.meshio.load_mesh(obj_name)  # and re-read but well, convenient for testing
-    os.remove(obj_name) #delete cause it won't be used later for the neuroglancer format transformation
 
-    # to ouput the zero-centred object:
-    mesh = pym.form_mesh(ori_mesh.vertices - T, ori_mesh.faces)
+    writeToObjFile(newobj, obj_name, id) # probably does not need to be written
+    os.remove(obj_name) #delete cause it won't be used later for the neuroglancer format transformation
+    ori_mesh = trimesh.load_mesh(obj_name, force="mesh")
+    # translate to zero
+    ori_mesh.apply_translation(T)
 
     firstPass = True
     df = pd.read_csv(positionlist, header=0)
     #go through csv file. column ID should match file name
     #column name will be used for readable folder names.
     #print(g)
-    #os.makedirs(basepath+"/objects/")
     for index, row in df.iterrows():
         if(g not in row["id"] ):  #find the matching rows for the given mrc file
             continue
@@ -152,19 +151,22 @@ for f in mrc_files:
         rot = R.from_euler("ZXZ", eulers, degrees=True)
 
         # translate to zero
-        mesh = pym.form_mesh(ori_mesh.vertices - T, ori_mesh.faces)
-
         # rotate
-        newVertices = np.dot(rot.as_matrix(), mesh.vertices.T).T
-        rotMesh = pym.form_mesh(newVertices, ori_mesh.faces)
-
+        newVertices = np.dot(rot.as_matrix(), ori_mesh.vertices.T).T
+        rotMesh = trimesh.Trimesh(newVertices,
+                       ori_mesh.faces,
+                       process=False)
+        
         # translate back
-        # here I guess 'T' should be the position in the tomogram from the csv
+        # 'T' should be the position in the tomogram from the csv
         T_final = np.array([float(row['x']),float(row['y']),float(row['z'])],dtype=float)
-        newMesh = pym.form_mesh( rotMesh.vertices + T_final, rotMesh.faces)
+        rotMesh.apply_translation(T_final)
+        #newMesh.vertices+=T_final
         #print(index)
+        rotMesh.visual = trimesh.visual.ColorVisuals() #remove material info from file
+        e = rotMesh.export(basepath+"/objects/"+row["name"]+"/input/"+id+".obj",file_type='obj')
         #save: The object names are a concatenation of the type and the place in the CSV file. This creates a unique ID which is used later on. Must be numerical.
-        pym.save_mesh(basepath+"/objects/"+row["name"]+"/input/" +id + ".obj",newMesh)
+
 
 print("Done : Created object files inside the objects folder.")
 

@@ -24,6 +24,7 @@ done
 
 # #enable processing of hidden files starting with .
 shopt -s dotglob
+rm -r "${mypath}/bucket/"
 #generate the info file from header....'''
 for i in  "${mypath}/*.mrc" 
 do
@@ -34,8 +35,8 @@ do
     rm "${mypath}/flipped.mrc"
     mkdir -p "${mypath}/image_slices"
 
-    clip flipz $i "${mypath}/flipped.mrc"
-    mrc2tif "${mypath}/flipped.mrc" "${mypath}/image_slices/img"
+    #clip flipz $i "${mypath}/flipped.mrc"
+    mrc2tif $i "${mypath}/image_slices/img"
 
     mkdir -p "${mypath}/bucket/dataset/image"
 
@@ -51,10 +52,10 @@ do
     #Writes many obj files in named folder inside new folder objects
     python multiplyObjects2.py "${mypath}/" "${mypath}/annotations/particles.csv"
     #convert the many obj files to neuroglancer readable format
-    sh ./create_neuroglancer_meshes.sh "${mypath}"
+    bash ./create_neuroglancer_meshes.sh "${mypath}"
 done
 
-echo "All done in " $SECONDS " seconds."
+echo "All done in ${SECONDS} seconds."
 echo "Copy the contents of the dataset/ folder to the server."
 echo "Make sure the database has a dataset pointing to the new data."
 echo "If you are admin and have scp to the server set up called IMP do: "
