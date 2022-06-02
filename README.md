@@ -7,7 +7,7 @@ These pipelines habe been developed to convert EM datasets (.mrc format, or imag
 2) MRC file for the image, **as well as a class mask as MRC**. This will result in a segmentation layer for each type of class found in the file, with its individual object meshes calculated from the segmentation file. At the current stage, this does not support additional values like cc, and does not have the interactive functionalities like grouping, display meshes in an area etc. This can be used for viewing.
 
 Both ways result in a folder of ...path.../bucket/dataset/
-The contents of this folder will be hosted either locally on your computer for access with local neuroglancer, ot on the web app for which the database has to be updated - It will be possible to do this step some time in the future.
+The contents of this folder will be hosted either locally on your computer for access with local neuroglancer, or on the web app for which the database has to be updated - It will be possible to do this step some time in the future.
   
 
 <h4>OS Requirement</h4>
@@ -21,14 +21,18 @@ WSL on Windows works, however you need to keep to the WSL file system when servi
 - The required packages are bundled in the conda environment found in **environment.yml**
 
 <h5>For object mesh creation</h5>
-- [multiresoultion-mesh-creator](https://github.com/davidackerman/multiresolution-mesh-creator)
+- ***[multiresoultion-mesh-creator](https://github.com/davidackerman/multiresolution-mesh-creator)***
 
 <h5>For local server</h5>
 A nginx config file to host on localhost is provided. The server has to be able to serve compressed files and overcome a few caveats with the filenames, therefore simplehttpserver wasn't sufficient. 
 You can install nginx on linux with 
-        apt-get install nginx
+
+    apt-get install nginx
+
 and add the config file at /etc/nginx/sites-available/ with a symlink to /etc/nginx/sites-enabled/. Edit the config file to point to the folder you want to serve. Use
-        service nginx start
+  
+    service nginx start
+  
 to start, restart if you made changes to the config file, and stop to stop. 
 Note: This should only be used as long as you want to look at the files in your browser and stopped afterwards.
 
@@ -55,7 +59,7 @@ Please look at the two examples to understand the required folder structure. The
 - Run the pipeline shell script with -p parameter pointing to the folder.
 - The result will be put in bucket/dataset folder.
 
-The content of the resulting folder is in the neuroglancer precomputed format. Our imp version of neuroglancer can read and process all the files in there when provided with the url to the folder, and will add interaction, however the raw image/segmentation/mesh data can be loaded into any neuroglancer instance manually by hosting it and then pointing to the URL at the source panel.
+The content of the resulting folder is in the neuroglancer precomputed format. Our imp version of neuroglancer can read and process all the files in there when provided with the url to the folder, and will add interaction, however the raw image/segmentation/mesh data can be loaded into any neuroglancer instance  by serving it and then pointing to the URL at the source panel of the web app.
 
 Please check the examples folder structure in this repository to understand where to put what for input.
 
