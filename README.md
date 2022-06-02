@@ -29,12 +29,16 @@ You can install nginx on linux with
 
     apt-get install nginx
 
+or on MAC:
+
+    brew install nginx 
+    
 and add the config file at /etc/nginx/sites-available/ with a symlink to /etc/nginx/sites-enabled/. Edit the config file to point to the folder you want to serve. Use
   
     service nginx start
   
 to start, restart if you made changes to the config file, and stop to stop. 
-Note: This should only be used as long as you want to look at the files in your browser and stopped afterwards.
+Note: This should only be used as long as you want to look at the files in your browser and stopped afterwards. Of course, other services will work as well, but have to be correctly configured, refer to the nginx config to get an idea of what is necessary.
 
 <h5>Folder structure</h5>
 Please look at the two examples to understand the required folder structure. The two images below also illustrate the structure.
