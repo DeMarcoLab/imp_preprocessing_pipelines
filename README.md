@@ -23,6 +23,15 @@ WSL on Windows works, however you need to keep to the WSL file system when servi
 <h5>For object mesh creation</h5>
 - [multiresoultion-mesh-creator](https://github.com/davidackerman/multiresolution-mesh-creator)
 
+<h5>For local server</h5>
+A nginx config file to host on localhost is provided. The server has to be able to serve compressed files and overcome a few caveats with the filenames, therefore simplehttpserver wasn't sufficient. 
+You can install nginx on linux with 
+        apt-get install nginx
+and add the config file at /etc/nginx/sites-available/ with a symlink to /etc/nginx/sites-enabled/. Edit the config file to point to the folder you want to serve. Use
+        service nginx start
+to start, restart if you made changes to the config file, and stop to stop. 
+Note: This should only be used as long as you want to look at the files in your browser and stopped afterwards.
+
 <h5>Folder structure</h5>
 Please look at the two examples to understand the required folder structure. The two images below also illustrate the structure.
 
@@ -46,7 +55,9 @@ Please look at the two examples to understand the required folder structure. The
 - Run the pipeline shell script with -p parameter pointing to the folder.
 - The result will be put in bucket/dataset folder.
 
-Please check the examples folder structure in this repository to understand where to put what.
+The content of the resulting folder is in the neuroglancer precomputed format. Our imp version of neuroglancer can read and process all the files in there when provided with the url to the folder, and will add interaction, however the raw image/segmentation/mesh data can be loaded into any neuroglancer instance manually by hosting it and then pointing to the URL at the source panel.
+
+Please check the examples folder structure in this repository to understand where to put what for input.
 
 <h5>To run</h5>
 
