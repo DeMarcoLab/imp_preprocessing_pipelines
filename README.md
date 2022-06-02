@@ -1,10 +1,10 @@
-# IMP_Preprocessing
+# IMP Preprocessing
 
-These pipeline has been developed to convert EM datasets (.mrc format, or image slices) to the precomputed neuroglancer format. There are two pathways:
+These pipelines habe been developed to convert EM datasets (.mrc format, or image slices) to the precomputed neuroglancer format. There are two pathways:
 
-1) MRC file for the image available with a list of molecules and their position/rotations. Other values like cc can be in this table. If a .obj or .mrc file is available for the individual molecules, it will be used to create duplicated objects at the correct position/rotation. 
+1) MRC file for the image available with a **list of molecules and their position/rotations.** Other values like cc can be in this table. If a .obj or .mrc image volume file is available for the individual molecules, it will be used to create duplicated objects at the correct position/rotation.
   
-2) MRC file for the image, as well as a class mask as MRC. This will result in a segmentation layer for each type of class found in the file, with its individual object meshes calculated from the segmentation file. At the current stage, this does not support additional values like cc, and does not have the interactive functionalities like grouping, display meshes in an area etc. This can be used for viewing.
+2) MRC file for the image, **as well as a class mask as MRC**. This will result in a segmentation layer for each type of class found in the file, with its individual object meshes calculated from the segmentation file. At the current stage, this does not support additional values like cc, and does not have the interactive functionalities like grouping, display meshes in an area etc. This can be used for viewing.
 
 Both ways result in a folder of ...path.../bucket/dataset/
 The contents of this folder will be hosted either locally on your computer for access with local neuroglancer, ot on the web app for which the database has to be updated - It will be possible to do this step some time in the future.
@@ -29,6 +29,27 @@ WSL on Windows works, however you need to keep to the WSL file system when servi
 <h5>Folder structure</h5>
 Please look at the two examples to understand the required folder structure. The two images below also illustrate the structure.
 
+**Pathway 1, image file with table of locations of particles as well as surface volume files**
+
+![pathway](images/object_list_structure.jpg)
+
+- Place particles.csv in annotations folder: Table contains locations/rotations/name of particles. These have to match the mrc files in templates folder
+- Templates folder: Add the available mrc files for particles here.
+- Place the image mrc file on the parent folder. The greyed out folders will be created by the script and don't have to be present.
+- Run the pipeline shell script with -p parameter pointing to the folder.
+- The result will be put in bucket/dataset folder.
+
+**Pathway 2, image file with classmask mrc present**
+
+![pathway](images/segmentationMap.jpg)
+
+- In meta folder, you can specify a labels.csv file to give human readable names to the ids found in the classmask file.
+- classmask file should be placed in segmentation folder and named such.
+- Place the image mrc file on the parent folder. The greyed out folders will be created by the script and don't have to be present.
+- Run the pipeline shell script with -p parameter pointing to the folder.
+- The result will be put in bucket/dataset folder.
+
+Please check the examples folder structure in this repository to understand where to put what.
 
 <h5>To run</h5>
 
