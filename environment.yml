@@ -309,4 +309,3 @@ dependencies:
     - zope-event==4.5.0
     - zope-interface==5.4.0
     - zstandard==0.17.0
-prefix: /home/bluebee/anaconda3/envs/imp
