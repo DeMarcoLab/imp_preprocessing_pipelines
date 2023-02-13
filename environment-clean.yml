@@ -1,0 +1,29 @@
+name: preprocessing
+channels:
+  - open3d-admin
+  - flyem-forge
+  - conda-forge
+  - anaconda
+  - defaults
+dependencies:
+  # - python=3.9
+  # - numpy 
+  # - pandas
+  # - scipy
+  # - scikit-learn
+  - scikit-image
+  # - trimesh
+  - matplotlib
+  - mrcfile
+  # - joblib
+  # - psutil
+  # - tqdm
+  - watchdog
+  # - cython
+  # - make
+  - pip
+  - pip:
+    - tinybrain
+    - cloud-volume
+    # - pyfqmr
+    # - git+https://github.com/mitchellshargreaves-monash/multiresolution-mesh-creator
