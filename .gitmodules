@@ -1,0 +1,3 @@
+[submodule "multiresolution-mesh-creator"]
+	path = multiresolution-mesh-creator
+	url = git@github.com:mitchellshargreaves-monash/multiresolution-mesh-creator.git
