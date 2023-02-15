@@ -1,7 +1,5 @@
 echo "Creating preprocessing environment..."
-conda clean -a
-conda remove -n preprocessing --all
-conda env update -n preprocessing --file ./multiresolution-mesh-creator/multiresolution_mesh_creator.yml
+conda create --name preprocessing --file ./multiresolution-mesh-creator/multiresolution_mesh_creator.yml
 conda activate preprocessing
 
 echo "Building and installing dvidutils..."
