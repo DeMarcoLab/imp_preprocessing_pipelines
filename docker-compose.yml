@@ -1,0 +1,18 @@
+version: "3.3"
+
+services:
+  preprocessing-watchdog:
+    image: preprocessing:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    tty: true
+    volumes:
+      - /market-file:/remote
+
+  # imod:
+  #   image: hzhan3/imod:4.11.5
+  #   container_name: imod
+  #   tty: true
+  #   volumes:
+  #     - /market-file:/remote

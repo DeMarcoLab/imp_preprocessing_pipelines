@@ -18,6 +18,7 @@ dependencies:
   # - joblib
   # - psutil
   # - tqdm
+  # - tifffile
   - watchdog
   # - cython
   # - make
