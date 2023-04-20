@@ -71,8 +71,8 @@ RUN pip install ./multiresolution-mesh-creator && \
 #     conda activate base && \
 RUN conda env update --name base --file environment-clean.yml && \
     conda clean -a -y && \
-    conda update --all && \
-    conda clean -a -y && \
+    # conda update --all && \
+    # conda clean -a -y && \
     rm environment-clean.yml
 
 # Install imod dependancies

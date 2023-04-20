@@ -25,6 +25,6 @@ dependencies:
   - pip
   - pip:
     - tinybrain
-    - cloud-volume
+    - cloud-volume==8.7.0
     # - pyfqmr
     # - git+https://github.com/mitchellshargreaves-monash/multiresolution-mesh-creator
