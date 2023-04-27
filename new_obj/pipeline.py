@@ -5,8 +5,14 @@ from pathlib import Path
 
 import math
 import numpy as np
+import pandas as pd
+import matplotlib
+import matplotlib.cm
+
 import tifffile
 import mrcfile
+import starfile
+import json
 import tinybrain
 from cloudvolume import CloudVolume
 from PIL import Image
@@ -24,7 +30,7 @@ import contextlib
 # Extract the header of the mrc file as a dictionary
 # Extract the data of the mrc as a npy
 def parse_mrc(mrc_path, tiff_path=None):
-    mrc = mrcfile.mmap(mrc_path, mode='r+')
+    mrc = mrcfile.mmap(mrc_path, mode="r+")
 
     # Extract header
     header = {
@@ -41,11 +47,6 @@ def parse_mrc(mrc_path, tiff_path=None):
     # Optionally save data as tiff
     # mrc.data is in the shape: [z, y, x]
     if tiff_path:
-        # Make sure dir exists
-        if not tiff_path.exists():
-            os.makedirs(tiff_path)
-
-        # Save data as tiffs
         digits = len(str(mrc.data.shape[0]))
         for i in range(mrc.data.shape[0]):
             tifffile.imwrite(tiff_path/f"img.{i:0{digits}d}.tif", mrc.data[i])
@@ -125,12 +126,12 @@ def create_precomputed_volume(
         info=CloudVolume.create_new_info(
             num_channels=1,
             layer_type=layer_type,
-            data_type=dtype,  # Channel images might be 'uint8'
+            data_type=dtype,  # Channel images might be "uint8"
             encoding="raw",  # raw, jpeg, compressed_segmentation, fpzip, kempressed
             resolution=header["pixel_spacing"],  # Voxel scaling, units are in nanometers
             voxel_offset=[0, 0, 0],  # x,y,z offset in voxels from the origin
             # Pick a convenient size for your underlying chunk representation
-            # Powers of two are recommended, doesn't need to cover image exactly
+            # Powers of two are recommended, doesn"t need to cover image exactly
             chunk_size=chunk_size,  # units are voxels
             volume_size=(header["x"], header["y"], header["z"])  # e.g. a cubic millimeter dataset
         )
@@ -157,11 +158,72 @@ def create_precomputed_volume(
         print("timed out on a slice. moving on to the next step of pipeline")
 
 
+def extract_objects(config):
+    particles = pd.DataFrame({})
+
+    for i, (star, volume, name) in enumerate(zip(config["object_stars"], config["object_volumes"], config["object_names"])):
+        star = starfile.read(input_path/star)
+
+        # Mandatory fields
+        object_table = pd.DataFrame({
+            # Might need to subtract origin, check with Alex/Charles
+            "x": star["particles"]["rlnCoordinateX"] + star["particles"]["rlnOriginXAngst"] / star["optics"]["rlnImagePixelSize"][0],
+            "y": star["particles"]["rlnCoordinateY"] + star["particles"]["rlnOriginYAngst"] / star["optics"]["rlnImagePixelSize"][0],
+            "z": star["particles"]["rlnCoordinateZ"] + star["particles"]["rlnOriginZAngst"] / star["optics"]["rlnImagePixelSize"][0],
+            "eux": star["particles"]["rlnAngleRot"],
+            "euy": star["particles"]["rlnAngleTilt"],
+            "euz": star["particles"]["rlnAnglePsi"],
+            "mrcfile": volume,
+            "name": name,
+            "particle_index": i / len(config["object_stars"])
+        })
+
+        # 0 or more extra fields
+        for sub in config["subclasses"]:
+            object_table[sub] = star["particles"][sub]
+
+        # Add to cumulative table of particles
+        particles = particles.append(object_table, ignore_index = True)
+    
+    return particles
+
+def annotate_objects(particles, config, coordinates_path):
+    # Support up to 3 colour maps
+    cmaps = ["jet","hsv","BrBG"]
+
+    # Assign each subclass a colourmap and calculate its norm function
+    items = [{
+        "subclass": sub,
+        "cmap": matplotlib.cm.get_cmap(cmaps[i]),
+        "val_norm": matplotlib.colors.Normalize(vmin=particles[sub].min(), vmax=particles[sub].max())
+    } for i, sub in enumerate(config["subclasses"])]
+
+    # Define empty lists for each particle name and add a property to list the names
+    annotations = {name: [] for name in config["object_names"]}
+    annotations["columns"] = config["object_names"]
+
+    # Create a point for each subclass
+    for i, row in particles.iterrows():
+        annotations[row["name"]].append({
+            "type": "point", 
+            "description": "".join([f"{item['subclass']}: {row[item['subclass']]}" for item in items]) if items else "no further data", 
+            "id": "".join([str(ord(c)) for c in row["name"]]) + str(i),
+            "point": [row["x"], row["y"], row["z"]],
+            "props": [matplotlib.colors.to_hex(matplotlib.cm.get_cmap("tab20")(row["particle_index"]))] + \
+                [matplotlib.colors.to_hex(item["cmap"](row[item["subclass"]])) for item in items],
+            "fields": {item["subclass"]: item["val_norm"](row[item["subclass"]]) for item in items}
+        })
+
+    # Save annotation as a json
+    for key in annotations.keys():
+        with open(coordinates_path/(key.strip() + ".json"), "w", encoding="utf-8") as jsonf:
+            jsonf.write(json.dumps(annotations[key], indent=4))
+
 # Parse inputs
 parser = argparse.ArgumentParser()
-parser.add_argument('input_path')
-parser.add_argument('staging_path')
-parser.add_argument('output_path')
+parser.add_argument("input_path")
+parser.add_argument("staging_path")
+parser.add_argument("output_path")
 args = parser.parse_args()
 
 # Set base paths
@@ -170,14 +232,24 @@ staging_path = Path(args.staging_path)
 output_path = Path(args.output_path)
 
 # Parse metadata.json
-with open(input_path/"metadata.json", 'r') as f:
+with open(input_path/"metadata.json", "r") as f:
     config = json.loads(f.read())
 
 # Construct file paths 
-parent_volume = input_path/config["tilt_volume"]
-image_slices = output_path/config["name"]/"image_slices"
-precomputed = output_path/config["name"]/"image"
+parent_volume_path = input_path/config["tilt_volume"]
+image_slices_path = output_path/config["name"]/"image_slices"
+precomputed_path = output_path/config["name"]/"image"
+coordinates_path = output_path/config["name"]/"coordinates"
 
-# Pipeline
-header = parse_mrc(parent_volume, image_slices)
-create_precomputed_volume(image_slices, precomputed, header)
+# Create folders
+for path in (image_slices_path, precomputed_path, coordinates_path):
+    if not path.exists():
+        os.makedirs(path)
+
+# Convert parent volume
+header = parse_mrc(parent_volume_path, tiff_path=image_slices_path)
+create_precomputed_volume(image_slices_path, precomputed_path, header)
+
+# Extract and annotate objects
+particles = extract_objects(config)
+annotate_objects(particles, config, coordinates_path)
