@@ -1,19 +1,26 @@
 import argparse
 import json
 import os
+import shutil
+import subprocess
 from pathlib import Path
 
 import math
 import numpy as np
 import pandas as pd
-import matplotlib
-import matplotlib.cm
+from scipy.spatial.transform import Rotation as R
+from matplotlib.colors import Normalize, to_hex
+from matplotlib.cm import get_cmap
+from pandarallel import pandarallel
+pandarallel.initialize(progress_bar=True)
 
 import tifffile
 import mrcfile
 import starfile
 import json
 import tinybrain
+import trimesh
+import skimage.measure as skim
 from cloudvolume import CloudVolume
 from PIL import Image
 Image.MAX_IMAGE_PIXELS = None
@@ -24,12 +31,11 @@ from psutil import virtual_memory
 from tqdm import tqdm
 import contextlib
 
-
-
-
-# Extract the header of the mrc file as a dictionary
-# Extract the data of the mrc as a npy
-def parse_mrc(mrc_path, tiff_path=None):
+def parse_mrc(mrc_path, json_path=None, tiff_path=None):
+    """
+    Extract the header of the mrc file as a dictionary
+    Optionally export the data of the mrc file as a tiff
+    """
     mrc = mrcfile.mmap(mrc_path, mode="r+")
 
     # Extract header
@@ -37,8 +43,8 @@ def parse_mrc(mrc_path, tiff_path=None):
         "x": mrc.header.nx.item(0),
         "y": mrc.header.ny.item(0),
         "z": mrc.header.nz.item(0),
-        # why this not called voxel size?
-        "pixel_spacing": [mrc.voxel_size.x/10,mrc.voxel_size.y/10,mrc.voxel_size.z/10],
+        # different naming convention to match Neuroglancer's metadata format
+        "pixel_spacing": [mrc.voxel_size.x/10, mrc.voxel_size.y/10, mrc.voxel_size.z/10],
         "min": mrc.header.dmin.item(0),
         "max": mrc.header.dmax.item(0),
         "mean": mrc.header.dmean.item(0)
@@ -50,6 +56,11 @@ def parse_mrc(mrc_path, tiff_path=None):
         digits = len(str(mrc.data.shape[0]))
         for i in range(mrc.data.shape[0]):
             tifffile.imwrite(tiff_path/f"img.{i:0{digits}d}.tif", mrc.data[i])
+    
+    # Export header as json for neuroglancer
+    if json_path:
+        with open(json_path, "w", encoding="utf-8") as jsonf:
+            jsonf.write(json.dumps(header, indent=4))
     
     mrc.close()
     return header
@@ -80,23 +91,24 @@ def tqdm_joblib(tqdm_object):
 
 # This looks like it assumes x,y,z orientation
 # Need to confirm this is what we want since its different to mrcfile
-def process(z, file_path, layer_path, num_mips):
-    """Upload single slice to S3 as precomputed
-    Args:
-        z (int): Z slice number to upload
-        file_path (str): Path to z-th slice
-        layer_path (str): S3 path to store data at
-        num_mips (int): Number of 2x2 downsampling levels in X,Y
+def process_image_slice(z, file_path, layer_path, num_mips):
     """
+    Precompute an image slice into an image pyramid
+    Result will be saved at layer_path
+    """
+
+    # Create a cloud volume object for each mip
     vols = [
         CloudVolume(layer_path, mip=i, parallel=False, fill_missing=False)
         for i in range(num_mips)
     ]
 
+    # Import data and calculate pyramid
     array = np.squeeze(np.array(Image.open(file_path))).T[..., None]
     img_pyramid = tinybrain.accelerated.average_pooling_2x2(array, num_mips)
-    vols[0][:, :, z] = array
 
+    # Fill in list of volumes
+    vols[0][:, :, z] = array
     for i in range(num_mips - 1):
         vols[i + 1][:, :, z] = img_pyramid[i]
 
@@ -104,13 +116,7 @@ def process(z, file_path, layer_path, num_mips):
 def create_precomputed_volume(
     image_slices_path, precomputed_path, header, layer_type="image",dtype="float32", parallel=False
 ):
-    """Create precomputed volume on S3 from 2D TIF series
-    Args:
-        input_path (str): Local path to 2D TIF series
-        voxel_size (np.ndarray): Voxel size of image in X,Y,Z in microns
-        precomputed_path (str): S3 path where precomputed volume will be stored
-        extension (str, optional): Extension for image files. Defaults to "tif".
-    """
+    """Create precomputed volume from 2D TIF series"""
     image_slices = os.listdir(image_slices_path)
     image_slices.sort()
 
@@ -136,10 +142,13 @@ def create_precomputed_volume(
             volume_size=(header["x"], header["y"], header["z"])  # e.g. a cubic millimeter dataset
         )
     )
-    [vol.add_scale((2 ** i, 2 ** i, 1), chunk_size=chunk_size) for i in range(num_mips)]
+
+    # Compute scales for the image pyramid and add to cloud volume object
+    for i in range(num_mips):
+        vol.add_scale((2 ** i, 2 ** i, 1), chunk_size=chunk_size)
     vol.commit_info()
 
-    # num procs to use based on available memory
+    # Calculate num procs to use based on available memory and number of cpus
     num_procs = min(
         math.floor(virtual_memory().total / (header["x"] * header["y"] * 8)),
         joblib.cpu_count(),
@@ -149,7 +158,7 @@ def create_precomputed_volume(
     try:
         with tqdm_joblib(tqdm(desc="Creating precomputed volume", total=len(image_slices))) as progress_bar:
             Parallel(num_procs, timeout=3600, verbose=10)(
-                delayed(process)(int(fn.split(".")[1]), image_slices_path/fn, vol.layer_cloudpath, num_mips)
+                delayed(process_image_slice)(int(fn.split(".")[1]), image_slices_path/fn, vol.layer_cloudpath, num_mips)
                 for fn in image_slices
             )
     # Why is it ok to move on?
@@ -158,7 +167,11 @@ def create_precomputed_volume(
         print("timed out on a slice. moving on to the next step of pipeline")
 
 
-def extract_objects(config):
+def extract_objects(config, csv_path):
+    """
+    Extract particle objects from the provided stars
+    Returns as a pandas data frame and saves at the csv_path
+    """
     particles = pd.DataFrame({})
 
     for i, (star, volume, name) in enumerate(zip(config["object_stars"], config["object_volumes"], config["object_names"])):
@@ -175,7 +188,7 @@ def extract_objects(config):
             "euz": star["particles"]["rlnAnglePsi"],
             "mrcfile": volume,
             "name": name,
-            "particle_index": i / len(config["object_stars"])
+            "index": i / len(config["object_stars"])
         })
 
         # 0 or more extra fields
@@ -183,20 +196,24 @@ def extract_objects(config):
             object_table[sub] = star["particles"][sub]
 
         # Add to cumulative table of particles
-        particles = particles.append(object_table, ignore_index = True)
+        particles = particles.append(object_table, ignore_index=True)
+        particles.to_csv(csv_path)
     
     return particles
 
-def annotate_objects(particles, config, coordinates_path):
-    # Support up to 3 colour maps
-    cmaps = ["jet","hsv","BrBG"]
 
-    # Assign each subclass a colourmap and calculate its norm function
-    items = [{
-        "subclass": sub,
-        "cmap": matplotlib.cm.get_cmap(cmaps[i]),
-        "val_norm": matplotlib.colors.Normalize(vmin=particles[sub].min(), vmax=particles[sub].max())
-    } for i, sub in enumerate(config["subclasses"])]
+def name2id(name):
+    """
+    A function to create a unique id composed of integers out of a given name
+    Truncated to 0:4 to fit in uint64
+    """
+    return "".join([str(ord(c)) for c in name[0:4]]) 
+
+
+def annotate_objects(particles, config, coordinates_path):
+    """Create neuroglancer format object annotations from the particle information"""
+    # Create norm functions
+    norms = {sub: Normalize(vmin=particles[sub].min(), vmax=particles[sub].max()) for sub in config["subclasses"]}
 
     # Define empty lists for each particle name and add a property to list the names
     annotations = {name: [] for name in config["object_names"]}
@@ -204,26 +221,95 @@ def annotate_objects(particles, config, coordinates_path):
 
     # Create a point for each subclass
     for i, row in particles.iterrows():
+        # Create description as list of subclass values
+        if config["subclasses"]:
+            desc = ", ".join([f"{sub}: {row[sub]}" for sub in config["subclasses"]])
+        # If no subclasses, label with no further data
+        else:
+            desc = "no further data"
+
+        # Construct annotations object
         annotations[row["name"]].append({
             "type": "point", 
-            "description": "".join([f"{item['subclass']}: {row[item['subclass']]}" for item in items]) if items else "no further data", 
-            "id": "".join([str(ord(c)) for c in row["name"]]) + str(i),
+            "description":  desc,
+            "id": name2id(row["name"]) + str(i),
             "point": [row["x"], row["y"], row["z"]],
-            "props": [matplotlib.colors.to_hex(matplotlib.cm.get_cmap("tab20")(row["particle_index"]))] + \
-                [matplotlib.colors.to_hex(item["cmap"](row[item["subclass"]])) for item in items],
-            "fields": {item["subclass"]: item["val_norm"](row[item["subclass"]]) for item in items}
+            "props": [to_hex(get_cmap("tab20")(row["index"]))] + \
+                [to_hex(get_cmap("plasma")(row[sub])) for sub in config["subclasses"]],
+            "fields": {sub: norms[sub](row[sub]) for sub in config["subclasses"]}
         })
 
-    # Save annotation as a json
+    # Save all annotations as a json
     for key in annotations.keys():
         with open(coordinates_path/(key.strip() + ".json"), "w", encoding="utf-8") as jsonf:
             jsonf.write(json.dumps(annotations[key], indent=4))
+
+
+def particle2mesh(row, object_id, original_mesh):
+    """Create triangle mesh objects out of the particles"""
+    # rotate
+    rot = R.from_euler("ZXZ", [row["eux"], row["euy"], row["euz"]], degrees=True)
+    newVertices = np.dot(rot.as_matrix(), original_mesh.vertices.T).T
+    rotMesh = trimesh.Trimesh(newVertices, original_mesh.faces, process=False)
+
+    # translate back
+    rotMesh.apply_translation(np.array([row['x'], row['y'], row['z']]))
+
+    # remove material info from file
+    rotMesh.visual = trimesh.visual.ColorVisuals()
+
+    # export to object file
+    rotMesh.export(objects_path/row["name"]/s0/f"{object_id}{row.name}.obj", file_type="obj")
+
+
+def write_object(vertices, faces, object_name):
+    """Record an object as an obj file"""
+
+    object_file = open(object_name, 'w')
+    object_file.write("o {name2id(object_name)}\n")
+    
+    for vertex in vertices:
+        object_file.write(f"v {vertex[0]} {vertex[1]} {vertex[2]}\n")
+    
+    object_file.write("s off\n")
+
+    for face in faces:
+        object_file.write(f"f {face[0]+1} {face[1]} {face[2]}\n")
+    
+    object_file.close()
+
+def create_object_meshes(volume, name):
+    """Convert object mrc volumes to triangular mesh"""
+    object_id = name2id(name)
+
+    # read in MRC volume
+    mrc = mrcfile.open(input_path/volume, "r+", permissive=True)
+
+    # Get object data
+    vertices, faces, _, _ = skim.marching_cubes(mrc.data.transpose(2, 1, 0))
+
+    # Store object and convert to triangular mesh
+    object_name = objects_path/f"{object_id}.obj"
+    write_object(vertices, faces, object_name)
+    original_mesh = trimesh.load_mesh(object_name, force="mesh")
+
+    # translate to zero
+    original_mesh.apply_translation(np.array([mrc.data.shape[2], mrc.data.shape[1], mrc.data.shape[0]]) / 2)
+
+    # Copy configs
+    shutil.copy("/app/new_obj/dask-config.yaml", objects_path/name/"dask-config.yaml")
+    shutil.copy("/app/new_obj/run-config.yaml", objects_path/name/"run-config.yaml")
+
+    # Export objects
+    particles[particles["name"] == name].parallel_apply(particle2mesh, axis=1, args=(object_id, original_mesh))
 
 # Parse inputs
 parser = argparse.ArgumentParser()
 parser.add_argument("input_path")
 parser.add_argument("staging_path")
 parser.add_argument("output_path")
+parser.add_argument("-t", "--test", action="store_true",
+                    help="Test the pipeline using only the 'head' of the particle table without cleaning up any generated files.")
 args = parser.parse_args()
 
 # Set base paths
@@ -232,24 +318,60 @@ staging_path = Path(args.staging_path)
 output_path = Path(args.output_path)
 
 # Parse metadata.json
+print("Loading config...")
 with open(input_path/"metadata.json", "r") as f:
     config = json.loads(f.read())
 
 # Construct file paths 
 parent_volume_path = input_path/config["tilt_volume"]
-image_slices_path = output_path/config["name"]/"image_slices"
+image_slices_path = staging_path/config["name"]/"image_slices"
 precomputed_path = output_path/config["name"]/"image"
 coordinates_path = output_path/config["name"]/"coordinates"
+objects_path = staging_path/config["name"]/"objects"
+s0 = "meshes/mesh_lods/s0"
 
 # Create folders
-for path in (image_slices_path, precomputed_path, coordinates_path):
+print("Creating folders...")
+paths = [image_slices_path, precomputed_path, coordinates_path, objects_path] + \
+    [objects_path/name/s0 for name in config["object_names"]]
+
+for path in paths:
     if not path.exists():
         os.makedirs(path)
 
-# Convert parent volume
-header = parse_mrc(parent_volume_path, tiff_path=image_slices_path)
+# Run pipeline
+print("Parsing parent volume...")
+header = parse_mrc(parent_volume_path, json_path=output_path/config["name"]/(config["name"] + ".json"), tiff_path=image_slices_path)
+
+print("Converting parent volume...")
 create_precomputed_volume(image_slices_path, precomputed_path, header)
 
-# Extract and annotate objects
-particles = extract_objects(config)
+print("Parsing object properties...")
+particles = extract_objects(config, output_path/config["name"]/"particles.csv")
+
+if args.test:
+    print("Reduce particle number for testing")
+    particles = particles.head()
+
+print("Annotating objects...")
 annotate_objects(particles, config, coordinates_path)
+
+for volume, name in zip(config["object_volumes"], config["object_names"]):
+    print(f"Creating object triangular mesh: {name} ({volume})")
+    create_object_meshes(volume, name)
+
+    print("\nCreating multiresolution mesh...")
+    subprocess.Popen(f"create-multiresolution-meshes {objects_path/name} -n {joblib.cpu_count()}", shell=True).wait()
+
+    print("Transferring mesh...")
+    multi_mesh = [file for file in os.listdir(objects_path) if file.startswith(str(objects_path/(name + "-")))][0]
+    os.rename(objects_path/multi_mesh, coordinates_path/(name + ".mesh"))
+
+    # Copy remaining parts?
+    # os.copy("")
+
+# Cleanup staging
+os.remove(staging_path/config["name"])
+
+# Archive input?
+# os.remove(staging_path/config["name"])
