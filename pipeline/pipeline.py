@@ -167,7 +167,7 @@ def create_precomputed_volume(
         print("timed out on a slice. moving on to the next step of pipeline")
 
 
-def extract_objects(config, csv_path):
+def extract_objects(config, csv_path, input_path):
     """
     Extract particle objects from the provided stars
     Returns as a pandas data frame and saves at the csv_path
@@ -180,9 +180,12 @@ def extract_objects(config, csv_path):
         # Mandatory fields
         object_table = pd.DataFrame({
             # Might need to subtract origin, check with Alex/Charles
-            "x": star["particles"]["rlnCoordinateX"] + star["particles"]["rlnOriginXAngst"] / star["optics"]["rlnImagePixelSize"][0],
-            "y": star["particles"]["rlnCoordinateY"] + star["particles"]["rlnOriginYAngst"] / star["optics"]["rlnImagePixelSize"][0],
-            "z": star["particles"]["rlnCoordinateZ"] + star["particles"]["rlnOriginZAngst"] / star["optics"]["rlnImagePixelSize"][0],
+            # "x": star["particles"]["rlnCoordinateX"] + star["particles"]["rlnOriginXAngst"] / star["optics"]["rlnImagePixelSize"][0],
+            # "y": star["particles"]["rlnCoordinateY"] + star["particles"]["rlnOriginYAngst"] / star["optics"]["rlnImagePixelSize"][0],
+            # "z": star["particles"]["rlnCoordinateZ"] + star["particles"]["rlnOriginZAngst"] / star["optics"]["rlnImagePixelSize"][0],
+            "x": (star["particles"]["rlnCoordinateX"] * star["optics"]["rlnImagePixelSize"][0] + star["particles"]["rlnOriginXAngst"]) / 10,
+            "y": (star["particles"]["rlnCoordinateY"] * star["optics"]["rlnImagePixelSize"][0] + star["particles"]["rlnOriginYAngst"]) / 10,
+            "z": (star["particles"]["rlnCoordinateZ"] * star["optics"]["rlnImagePixelSize"][0] + star["particles"]["rlnOriginZAngst"]) / 10,
             "eux": star["particles"]["rlnAngleRot"],
             "euy": star["particles"]["rlnAngleTilt"],
             "euz": star["particles"]["rlnAnglePsi"],
@@ -245,7 +248,7 @@ def annotate_objects(particles, config, coordinates_path):
             jsonf.write(json.dumps(annotations[key], indent=4))
 
 
-def particle2mesh(row, object_id, original_mesh):
+def particle2mesh(row, object_id, original_mesh, objects_path):
     """Create triangle mesh objects out of the particles"""
     # rotate
     rot = R.from_euler("ZXZ", [row["eux"], row["euy"], row["euz"]], degrees=True)
@@ -259,7 +262,7 @@ def particle2mesh(row, object_id, original_mesh):
     rotMesh.visual = trimesh.visual.ColorVisuals()
 
     # export to object file
-    rotMesh.export(objects_path/row["name"]/s0/f"{object_id}{row.name}.obj", file_type="obj")
+    rotMesh.export(objects_path/row["name"]/"meshes/mesh_lods/s0"/f"{object_id}{row.name}.obj", file_type="obj")
 
 
 def write_object(vertices, faces, object_name):
@@ -278,7 +281,7 @@ def write_object(vertices, faces, object_name):
     
     object_file.close()
 
-def create_object_meshes(volume, name):
+def create_object_meshes(volume, name, particles, input_path, objects_path):
     """Convert object mrc volumes to triangular mesh"""
     object_id = name2id(name)
 
@@ -297,81 +300,85 @@ def create_object_meshes(volume, name):
     original_mesh.apply_translation(np.array([mrc.data.shape[2], mrc.data.shape[1], mrc.data.shape[0]]) / 2)
 
     # Copy configs
-    shutil.copy("/app/new_obj/dask-config.yaml", objects_path/name/"dask-config.yaml")
-    shutil.copy("/app/new_obj/run-config.yaml", objects_path/name/"run-config.yaml")
+    shutil.copy("./dask-config.yaml", objects_path/name/"dask-config.yaml")
+    shutil.copy("./run-config.yaml", objects_path/name/"run-config.yaml")
 
     # Export objects
-    particles[particles["name"] == name].parallel_apply(particle2mesh, axis=1, args=(object_id, original_mesh))
+    particles[particles["name"] == name].parallel_apply(particle2mesh, axis=1, args=(object_id, original_mesh, objects_path))
 
-# Parse inputs
-parser = argparse.ArgumentParser()
-parser.add_argument("input_path")
-parser.add_argument("staging_path")
-parser.add_argument("output_path")
-parser.add_argument("-t", "--test", action="store_true",
-                    help="Test the pipeline using only the 'head' of the particle table without cleaning up any generated files.")
-args = parser.parse_args()
+def pipeline(input_path, staging_path, output_path, test=False):
+    """
+    Main Workflow
+    Convert an input dataset into cryoglancer format
+    """
+    # Parse metadata.json
+    print("Loading config...")
+    with open(input_path/"metadata.json", "r") as f:
+        config = json.loads(f.read())
 
-# Set base paths
-input_path = Path(args.input_path)
-staging_path = Path(args.staging_path)
-output_path = Path(args.output_path)
+    # Construct file paths 
+    parent_volume_path = input_path/config["tilt_volume"]
+    image_slices_path = staging_path/"image_slices"
+    precomputed_path = output_path/"image"
+    coordinates_path = output_path/"coordinates"
+    objects_path = staging_path/"objects"
+    s0 = "meshes/mesh_lods/s0"
 
-# Parse metadata.json
-print("Loading config...")
-with open(input_path/"metadata.json", "r") as f:
-    config = json.loads(f.read())
+    # Create folders
+    print("Creating folders...")
+    paths = [image_slices_path, precomputed_path, coordinates_path, objects_path] + \
+        [objects_path/name/s0 for name in config["object_names"]]
 
-# Construct file paths 
-parent_volume_path = input_path/config["tilt_volume"]
-image_slices_path = staging_path/config["name"]/"image_slices"
-precomputed_path = output_path/config["name"]/"image"
-coordinates_path = output_path/config["name"]/"coordinates"
-objects_path = staging_path/config["name"]/"objects"
-s0 = "meshes/mesh_lods/s0"
+    for path in paths:
+        if not path.exists():
+            os.makedirs(path)
 
-# Create folders
-print("Creating folders...")
-paths = [image_slices_path, precomputed_path, coordinates_path, objects_path] + \
-    [objects_path/name/s0 for name in config["object_names"]]
+    # Run pipeline
+    print("Parsing parent volume...")
+    header = parse_mrc(parent_volume_path, json_path=output_path/(config["name"] + ".json"), tiff_path=image_slices_path)
 
-for path in paths:
-    if not path.exists():
-        os.makedirs(path)
+    print("Converting parent volume...")
+    create_precomputed_volume(image_slices_path, precomputed_path, header)
 
-# Run pipeline
-print("Parsing parent volume...")
-header = parse_mrc(parent_volume_path, json_path=output_path/config["name"]/(config["name"] + ".json"), tiff_path=image_slices_path)
+    print("Parsing object properties...")
+    particles = extract_objects(config, output_path/"particles.csv", input_path)
 
-print("Converting parent volume...")
-create_precomputed_volume(image_slices_path, precomputed_path, header)
+    if test:
+        print("Reduce particle number for testing")
+        particles = particles.head(100)
 
-print("Parsing object properties...")
-particles = extract_objects(config, output_path/config["name"]/"particles.csv")
+    print("Annotating objects...")
+    annotate_objects(particles, config, coordinates_path)
 
-if args.test:
-    print("Reduce particle number for testing")
-    particles = particles.head()
+    for volume, name in zip(config["object_volumes"], config["object_names"]):
+        print(f"Creating object triangular mesh: {name} ({volume})")
+        create_object_meshes(volume, name, particles, input_path, objects_path)
 
-print("Annotating objects...")
-annotate_objects(particles, config, coordinates_path)
+        print("\nCreating multiresolution mesh...")
+        subprocess.Popen(f"create-multiresolution-meshes {objects_path/name} -n {joblib.cpu_count()}", shell=True).wait()
 
-for volume, name in zip(config["object_volumes"], config["object_names"]):
-    print(f"Creating object triangular mesh: {name} ({volume})")
-    create_object_meshes(volume, name)
+        print("Transferring mesh...")
+        multi_mesh = [file for file in os.listdir(objects_path) if file.startswith(str(name + "-"))] 
+        multi_mesh.sort()
+        shutil.copytree(objects_path/multi_mesh[-1], coordinates_path/(name + ".mesh"))
+        shutil.rmtree(objects_path/multi_mesh[-1])
 
-    print("\nCreating multiresolution mesh...")
-    subprocess.Popen(f"create-multiresolution-meshes {objects_path/name} -n {joblib.cpu_count()}", shell=True).wait()
+        print(f"{name} ({volume}) completed")
 
-    print("Transferring mesh...")
-    multi_mesh = [file for file in os.listdir(objects_path) if file.startswith(str(objects_path/(name + "-")))][0]
-    os.rename(objects_path/multi_mesh, coordinates_path/(name + ".mesh"))
+if __name__ == "__main__":
+    # Parse inputs
+    parser = argparse.ArgumentParser()
+    parser.add_argument("input_path")
+    parser.add_argument("staging_path")
+    parser.add_argument("output_path")
+    parser.add_argument("-t", "--test", action="store_true",
+                        help="Test the pipeline using only the 'head' of the particle table without cleaning up any generated files.")
+    args = parser.parse_args()
 
-    # Copy remaining parts?
-    # os.copy("")
+    # Set base paths
+    input_path = Path(args.input_path)
+    staging_path = Path(args.staging_path)
+    output_path = Path(args.output_path)
 
-# Cleanup staging
-os.remove(staging_path/config["name"])
-
-# Archive input?
-# os.remove(staging_path/config["name"])
+    # Run pipeline
+    pipeline(input_path, staging_path, output_path, test=args.test)
