@@ -8,11 +8,10 @@ services:
       dockerfile: Dockerfile
     tty: true
     volumes:
-      - /market-file:/remote
-
-  # imod:
-  #   image: hzhan3/imod:4.11.5
-  #   container_name: imod
-  #   tty: true
-  #   volumes:
-  #     - /market-file:/remote
+      - /market-file/input:/remote/input
+      - /market-file/staging:/remote/staging
+      - /market-file/output:/remote/output
+      - /home/ubuntu/workspace/preprocessing/pipeline/mongo_config.json:/app/mongo_config.json
+      - /imp-data/folderhost/:/hosting
+    entrypoint: >
+      sh -c "/usr/local/bin/_entrypoint.sh python processor.py /remote/input /remote/staging /remote/output /hosting /app/mongo_config.json -t"

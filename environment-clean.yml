@@ -7,21 +7,22 @@ channels:
   - defaults
 dependencies:
   # - python=3.9
-  # - numpy 
-  # - pandas
-  # - scipy
-  # - scikit-learn
-  - scikit-image
-  # - trimesh
+  - numpy 
+  - pandas
+  - scipy
   - matplotlib
+  - scikit-learn
+  - scikit-image
+  - tifffile
   - mrcfile
-  # - joblib
-  # - psutil
-  # - tqdm
-  # - tifffile
-  - watchdog
+  - trimesh
+  - joblib
+  - psutil
+  - tqdm
   # - cython
   # - make
+  - watchdog
+  - pymongo
   - pip
   - pip:
     - tinybrain

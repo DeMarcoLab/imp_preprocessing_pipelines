@@ -23,11 +23,8 @@ RUN wget https://boostorg.jfrog.io/artifactory/main/release/1.81.0/source/boost_
 # SHELL ["/bin/bash", "--login", "-c"]
 # RUN micromamba init bash
 
-# Copy python env files
-COPY multiresolution-mesh-creator ./multiresolution-mesh-creator
-COPY environment-clean.yml .
-
 # Create environment
+COPY multiresolution-mesh-creator ./multiresolution-mesh-creator
 RUN micromamba install --name base --file ./multiresolution-mesh-creator/multiresolution_mesh_creator.yml && \
     micromamba install --name base -c anaconda cmake && \
     micromamba clean -a -y
@@ -58,6 +55,7 @@ RUN pip install ./multiresolution-mesh-creator && \
     rm multiresolution-mesh-creator -r
 
 # Install IMP packages
+COPY environment-clean.yml .
 RUN micromamba install --name base --file environment-clean.yml && \
     micromamba clean -a -y && \
     # conda update --all && \
@@ -68,11 +66,11 @@ RUN micromamba shell init -s bash -p ~/micromamba
 
 # Copy scripts
 WORKDIR /app
-COPY with_segmentation_map ./with_segmentation_map
-COPY obj_list ./obj_list
-COPY new_obj ./new_obj
+# COPY with_segmentation_map ./with_segmentation_map
+# COPY obj_list ./obj_list
+COPY pipeline ./pipeline
 
-# Run watchdog script...
+# Run watchdog processor...
 # USER 1001
-# RUN python watchdog_test
-ENTRYPOINT ["/usr/local/bin/_entrypoint.sh", "python"]
+WORKDIR /app/pipeline
+ENTRYPOINT ["/usr/local/bin/_entrypoint.sh", "python", "processor.py", "/remote/input", "/remote/staging", "/remote/output", "/app/mongo_config.json"]
