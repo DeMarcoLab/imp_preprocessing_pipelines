@@ -10,9 +10,10 @@ class MongoDB():
         self.collection = self.database[self.config["collection"]]
 
     # Insert a new dataset entry 
-    def insert(self, name, text, user, privacy="public"):
-        return self.collection.insert_one({
-            "image": f'{self.config["file_host"]}/{name}/',
+    def insert(self, name, foldername, text, user, proteomics=False, privacy="public"):
+        # Construct object
+        dataset = {
+            "image": f'{self.config["file_host"]}/{foldername}/',
             "metadata": {
                 "text": text
             },
@@ -24,12 +25,21 @@ class MongoDB():
             "layers": [
                 {
                     "metadata": '',
-                    "path": f'{self.config["file_host"]}/{name}/coordinates/',
+                    "path": f'{self.config["file_host"]}/{foldername}/coordinates/',
                     "type": 'all'
                 }
             ],
             "processing": True
-        })
+        }
+
+        # Optionally add proteomics
+        if proteomics:
+            dataset["proteomics"] = {
+                "path": f'{self.config["file_host"]}/{foldername}/proteomics/proteomics.json'
+            }
+
+        # Insert to database
+        return self.collection.insert_one(dataset)
 
     # Update a dataset entry
     def update(self, doc_id, obj):

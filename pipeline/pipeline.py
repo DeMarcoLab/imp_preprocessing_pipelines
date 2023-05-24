@@ -31,6 +31,17 @@ from psutil import virtual_memory
 from tqdm import tqdm
 import contextlib
 
+def csv2json(csv_path, json_path):
+    df = pd.read_csv(csv_path)
+
+    # Convert each row into a dict
+    proteomics = []
+    for _, row in df.iterrows():
+        proteomics.append(row.to_dict())
+
+    with open(json_path, "w", encoding="utf-8") as jsonf:
+        jsonf.write(json.dumps(proteomics, indent=4))
+
 def parse_mrc(mrc_path, json_path=None, tiff_path=None):
     """
     Extract the header of the mrc file as a dictionary
@@ -167,7 +178,7 @@ def create_precomputed_volume(
         print("timed out on a slice. moving on to the next step of pipeline")
 
 
-def extract_objects(config, csv_path, input_path):
+def extract_objects(config, header, csv_path, input_path):
     """
     Extract particle objects from the provided stars
     Returns as a pandas data frame and saves at the csv_path
@@ -183,9 +194,9 @@ def extract_objects(config, csv_path, input_path):
             # "x": star["particles"]["rlnCoordinateX"] + star["particles"]["rlnOriginXAngst"] / star["optics"]["rlnImagePixelSize"][0],
             # "y": star["particles"]["rlnCoordinateY"] + star["particles"]["rlnOriginYAngst"] / star["optics"]["rlnImagePixelSize"][0],
             # "z": star["particles"]["rlnCoordinateZ"] + star["particles"]["rlnOriginZAngst"] / star["optics"]["rlnImagePixelSize"][0],
-            "x": (star["particles"]["rlnCoordinateX"] * star["optics"]["rlnImagePixelSize"][0] + star["particles"]["rlnOriginXAngst"]) / 10,
-            "y": (star["particles"]["rlnCoordinateY"] * star["optics"]["rlnImagePixelSize"][0] + star["particles"]["rlnOriginYAngst"]) / 10,
-            "z": (star["particles"]["rlnCoordinateZ"] * star["optics"]["rlnImagePixelSize"][0] + star["particles"]["rlnOriginZAngst"]) / 10,
+            "x": (star["particles"]["rlnCoordinateX"] + star["particles"]["rlnOriginXAngst"]) / 10 * header["pixel_spacing"][0],
+            "y": (star["particles"]["rlnCoordinateY"] + star["particles"]["rlnOriginYAngst"]) / 10 * header["pixel_spacing"][1],
+            "z": (star["particles"]["rlnCoordinateZ"] + star["particles"]["rlnOriginZAngst"]) / 10 * header["pixel_spacing"][2],
             "eux": star["particles"]["rlnAngleRot"],
             "euy": star["particles"]["rlnAngleTilt"],
             "euz": star["particles"]["rlnAnglePsi"],
@@ -281,12 +292,12 @@ def write_object(vertices, faces, object_name):
     
     object_file.close()
 
-def create_object_meshes(volume, name, particles, input_path, objects_path):
+def create_object_meshes(volume_path, name, particles, objects_path):
     """Convert object mrc volumes to triangular mesh"""
     object_id = name2id(name)
 
     # read in MRC volume
-    mrc = mrcfile.open(input_path/volume, "r+", permissive=True)
+    mrc = mrcfile.open(volume_path, "r+", permissive=True)
 
     # Get object data
     vertices, faces, _, _ = skim.marching_cubes(mrc.data.transpose(2, 1, 0))
@@ -306,7 +317,7 @@ def create_object_meshes(volume, name, particles, input_path, objects_path):
     # Export objects
     particles[particles["name"] == name].parallel_apply(particle2mesh, axis=1, args=(object_id, original_mesh, objects_path))
 
-def pipeline(input_path, staging_path, output_path, test=False):
+def pipeline(input_path, staging_path, test=False):
     """
     Main Workflow
     Convert an input dataset into cryoglancer format
@@ -318,15 +329,16 @@ def pipeline(input_path, staging_path, output_path, test=False):
 
     # Construct file paths 
     parent_volume_path = input_path/config["tilt_volume"]
+    proteomics_path = staging_path/"proteomics"
     image_slices_path = staging_path/"image_slices"
-    precomputed_path = output_path/"image"
-    coordinates_path = output_path/"coordinates"
+    precomputed_path = staging_path/"image"
+    coordinates_path = staging_path/"coordinates"
     objects_path = staging_path/"objects"
     s0 = "meshes/mesh_lods/s0"
 
     # Create folders
     print("Creating folders...")
-    paths = [image_slices_path, precomputed_path, coordinates_path, objects_path] + \
+    paths = [proteomics_path, image_slices_path, precomputed_path, coordinates_path, objects_path] + \
         [objects_path/name/s0 for name in config["object_names"]]
 
     for path in paths:
@@ -334,25 +346,30 @@ def pipeline(input_path, staging_path, output_path, test=False):
             os.makedirs(path)
 
     # Run pipeline
+    if config.get("proteomics", False):
+        print("Convert proteomics...")
+        csv2json(input_path/config["proteomics"], proteomics_path/"proteomics.json")
+        shutil.copy(input_path/config["proteomics"], proteomics_path/"proteomics.csv")
+
     print("Parsing parent volume...")
-    header = parse_mrc(parent_volume_path, json_path=output_path/(config["name"] + ".json"), tiff_path=image_slices_path)
+    header = parse_mrc(parent_volume_path, json_path=staging_path/(config["name"] + ".json"), tiff_path=image_slices_path)
 
     print("Converting parent volume...")
     create_precomputed_volume(image_slices_path, precomputed_path, header)
 
     print("Parsing object properties...")
-    particles = extract_objects(config, output_path/"particles.csv", input_path)
+    particles = extract_objects(config, header, staging_path/"particles.csv", input_path)
+
+    print("Annotating objects...")
+    annotate_objects(particles, config, coordinates_path)
 
     if test:
         print("Reduce particle number for testing")
         particles = particles.head(100)
 
-    print("Annotating objects...")
-    annotate_objects(particles, config, coordinates_path)
-
     for volume, name in zip(config["object_volumes"], config["object_names"]):
         print(f"Creating object triangular mesh: {name} ({volume})")
-        create_object_meshes(volume, name, particles, input_path, objects_path)
+        create_object_meshes(input_path/volume, name, particles, objects_path)
 
         print("\nCreating multiresolution mesh...")
         subprocess.Popen(f"create-multiresolution-meshes {objects_path/name} -n {joblib.cpu_count()}", shell=True).wait()
@@ -361,16 +378,18 @@ def pipeline(input_path, staging_path, output_path, test=False):
         multi_mesh = [file for file in os.listdir(objects_path) if file.startswith(str(name + "-"))] 
         multi_mesh.sort()
         shutil.copytree(objects_path/multi_mesh[-1], coordinates_path/(name + ".mesh"))
-        shutil.rmtree(objects_path/multi_mesh[-1])
 
         print(f"{name} ({volume}) completed")
+
+    print("Cleanup intermediate artifacts...")
+    shutil.rmtree(image_slices_path)
+    shutil.rmtree(objects_path)
 
 if __name__ == "__main__":
     # Parse inputs
     parser = argparse.ArgumentParser()
     parser.add_argument("input_path")
     parser.add_argument("staging_path")
-    parser.add_argument("output_path")
     parser.add_argument("-t", "--test", action="store_true",
                         help="Test the pipeline using only the 'head' of the particle table without cleaning up any generated files.")
     args = parser.parse_args()
@@ -378,7 +397,6 @@ if __name__ == "__main__":
     # Set base paths
     input_path = Path(args.input_path)
     staging_path = Path(args.staging_path)
-    output_path = Path(args.output_path)
 
     # Run pipeline
-    pipeline(input_path, staging_path, output_path, test=args.test)
+    pipeline(input_path, staging_path, test=args.test)

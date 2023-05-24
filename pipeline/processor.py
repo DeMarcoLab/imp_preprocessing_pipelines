@@ -10,6 +10,7 @@ import json
 import threading
 from queue import Queue
 from time import sleep
+from datetime import datetime
 
 from pathlib import Path
 
@@ -68,11 +69,10 @@ class EventHandler(FileSystemEventHandler):
 
 # Class to handle processing of IMP workloads
 class ImpProcesser():
-    def __init__(self, input_path, staging_path, output_path, hosting_path, mongo_config, test=False):
+    def __init__(self, input_path, staging_path, hosting_path, mongo_config, test=False):
         # Set paths
         self.input_path = Path(input_path)
         self.staging_path = Path(staging_path)
-        self.output_path = Path(output_path)
         self.hosting_path = Path(hosting_path)
 
         # Initialise
@@ -112,21 +112,21 @@ class ImpProcesser():
                         config = json.loads(f.read())
 
                     # This should extract the orcid user from the market-storage somehow in the future
-                    record = self.mongodb.insert(config["name"], config["description"], "USER")
+                    foldername = f"{config['name']}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                    record = self.mongodb.insert(config["name"], foldername, config["description"], "USER", proteomics=config.get("proteomics", False))
 
                     print("Running pipeline...")
-                    # TODO: We probably need a check that the output is empty...
-                    pipeline(self.input_path/dataset, self.staging_path/dataset, self.output_path/dataset, test=self.test)
+                    pipeline(self.input_path/dataset, self.staging_path/foldername, test=self.test)
 
+                    print(f"Making dataset available over web...")
+                    shutil.copytree(self.staging_path/foldername, self.hosting_path/foldername)
+                    self.mongodb.update_processed(record.inserted_id)
+                    
                     print(f"Cleaning up...")
-                    shutil.rmtree(self.staging_path/dataset)
+                    # shutil.rmtree(self.staging_path/foldername)
                     if not self.test:
                         shutil.rmtree(self.input_path/dataset)
                     
-                    print(f"Making dataset available over web...")
-                    self.mongodb.update_processed(record.inserted_id)
-                    shutil.copytree(self.output_path/dataset, self.hosting_path/config["name"])
-
                     print(f"Processing of {dataset} complete!")
 
                 except Exception as e:
@@ -134,15 +134,10 @@ class ImpProcesser():
                     print(e)
                     print("Skipping dataset and cleaning up artefacts...")
 
-                    try:
-                        shutil.rmtree(self.staging_path/dataset)
-                    except:
-                        pass
-
-                    try:
-                        shutil.rmtree(self.output_path/dataset)
-                    except:
-                        pass
+                    # try:
+                    #     shutil.rmtree(self.staging_path/foldername)
+                    # except:
+                    #     pass
             else:
                 sleep(5)
     
@@ -177,7 +172,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("input_path")
     parser.add_argument("staging_path")
-    parser.add_argument("output_path")
     parser.add_argument("hosting_path")
     parser.add_argument("mongo_config")
     parser.add_argument("-t", "--test", action="store_true",
@@ -185,5 +179,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Init and Run processor
-    imp = ImpProcesser(args.input_path, args.staging_path, args.output_path, args.hosting_path, args.mongo_config, test=args.test)
+    imp = ImpProcesser(args.input_path, args.staging_path, args.hosting_path, args.mongo_config, test=args.test)
     imp.run()
