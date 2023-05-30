@@ -9,6 +9,7 @@ The repository contains:
 - A `Dockerfile` and `docker-compose.yml` that builds a container that processes incoming datasets
 - expressjs
     - The backend for communicating with the Mongo database that stores the dataset metadata
+    - This is a modified example project and so while this section does serve the service adequately at its current scale it is in need of restructure
 - [multiresolution-mesh-creator](https://github.com/mitchellshargreaves-monash/multiresolution-mesh-creator/tree/4979288b4ca67ccd8b50a9b8865e747f9121f19e)
     - A submodule which the pipeline depends on
 - nginx
@@ -20,7 +21,10 @@ The repository contains:
     - The code used to process IMP datasets into something that can be viewed by the platform
 
 # Archetecture
-[Data flow](/images/dataflow.png)
+[Data flow](/images/data_flow.drawio.png)
+
+# Pipeline
+
 
 <!-- The pipeline takes in:
 - A `metadata.json` config file

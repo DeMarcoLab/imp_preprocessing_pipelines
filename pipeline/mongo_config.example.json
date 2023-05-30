@@ -1,0 +1,6 @@
+{
+    "uri": "URI",
+    "database": "DATABASE",
+    "collection": "COLLECTION",
+    "file_host": "https://URL.TO.NGINX.FILE.HOST:PORT/DIRECTORY"
+}
