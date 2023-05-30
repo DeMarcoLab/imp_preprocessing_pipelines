@@ -17,5 +17,5 @@ echo "Installing multiresolution mesh creator..."
 pip install ./multiresolution-mesh-creator
 
 echo "Updating with IMP packages..."
-conda env update --file environment-clean.yml
+conda env update --file environment.yml
 conda update --all
