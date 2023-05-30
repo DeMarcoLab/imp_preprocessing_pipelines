@@ -12,7 +12,7 @@ from scipy.spatial.transform import Rotation as R
 from matplotlib.colors import Normalize, to_hex
 from matplotlib.cm import get_cmap
 from pandarallel import pandarallel
-pandarallel.initialize(progress_bar=True)
+# pandarallel.initialize(progress_bar=True)
 
 import tifffile
 import mrcfile
@@ -32,7 +32,9 @@ from tqdm import tqdm
 import contextlib
 
 def csv2json(csv_path, json_path):
+    # Read and select the columns to display
     df = pd.read_csv(csv_path)
+    df = df[["Majority protein IDs", "iBAQ"]]
 
     # Convert each row into a dict
     proteomics = []
@@ -178,6 +180,7 @@ def create_precomputed_volume(
         print("timed out on a slice. moving on to the next step of pipeline")
 
 
+# Temporarily unused until we determine why the object stars do not match the volumes
 def extract_objects(config, header, csv_path, input_path):
     """
     Extract particle objects from the provided stars
@@ -223,7 +226,7 @@ def name2id(name):
     """
     return "".join([str(ord(c)) for c in name[0:4]]) 
 
-
+# Could take particles df in as an input rather than reading from file once object star / volume is resolved
 def annotate_objects(particles, config, coordinates_path):
     """Create neuroglancer format object annotations from the particle information"""
     # Create norm functions
@@ -294,6 +297,8 @@ def write_object(vertices, faces, object_name):
 
 def create_object_meshes(volume_path, name, particles, objects_path):
     """Convert object mrc volumes to triangular mesh"""
+    pandarallel.initialize(progress_bar=True)
+
     object_id = name2id(name)
 
     # read in MRC volume
@@ -328,7 +333,7 @@ def pipeline(input_path, staging_path, test=False):
         config = json.loads(f.read())
 
     # Construct file paths 
-    parent_volume_path = input_path/config["tilt_volume"]
+    parent_volume_path = input_path/config["parent_volume"]
     proteomics_path = staging_path/"proteomics"
     image_slices_path = staging_path/"image_slices"
     precomputed_path = staging_path/"image"
@@ -357,8 +362,11 @@ def pipeline(input_path, staging_path, test=False):
     print("Converting parent volume...")
     create_precomputed_volume(image_slices_path, precomputed_path, header)
 
-    print("Parsing object properties...")
-    particles = extract_objects(config, header, staging_path/"particles.csv", input_path)
+    # print("Parsing object properties...")
+    # particles = extract_objects(config, header, staging_path/"particles.csv", input_path)
+
+    # Load particles
+    particles = pd.read_csv(input_path/config["object_coordinates"])
 
     print("Annotating objects...")
     annotate_objects(particles, config, coordinates_path)

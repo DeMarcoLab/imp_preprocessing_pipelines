@@ -28,19 +28,57 @@ logging.basicConfig(level=logging.INFO,
 
 # Confirm if folder if completely uploaded
 def validate_folder(folder):
-    # Get all files in folder
-    file_list = os.listdir(folder)
+    # Load config
+    try:
+        with open(folder/"metadata.json", "r") as f:
+            config = json.loads(f.read())
+    except:
+        print("metadata.json not found")
+        return False
+    
+    # Confirm metadata is correctly structured
+    # Note that proteomics is optional and not required
+    try:
+        keys = [
+            "name",
+            "description",
+            "parent_volume",
+            "object_volumes",
+            "object_coordinates",
+            "object_names",
+            "subclasses",
+            "other_files"
+        ]
+        assert set(keys).issubset(config.keys())
+    except:
+        print("Config is not structured correctly")
+        return False
+    
+    # Confirm that referenced files exist
+    try:
+        files = [config["parent_volume"]] + config["object_volumes"] + [config["object_coordinates"]]
+        if config.get("proteomics", False):
+            files += [config["proteomics"]]
+        
+        for file in files:
+            assert os.path.isfile(folder/file)
+    except:
+        print(f"A referenced file did not exist ({file})")
+        return False
+    
+    # Confirm that the number of names match the number volumes
+    try:
+        assert len(config["object_names"]) == len(config["object_volumes"])
+    except:
+        print("There is a mismatch between the number of object volumes given and the number of object names")
+        return False
+    
+    # The dataset folder is ready for processing
+    # Note that this does not check if the dataset's files are well formed
+    # Checking this would involve loading these assets into memory, 
+    # which may be memory intensive and may as well happen during processing
+    return True
 
-    # Count each extension
-    extensions = {}
-    for file in file_list:
-        extension = file.split(".")[-1]
-        extensions[extension] = extensions.get(extension, 0) + 1
-
-    # If all has arrived return True, else False
-    if extensions.get("json", 0) >= 1 and extensions.get("mrc", 0) >= 3 and extensions.get("star", 0) >= 2:
-        return True
-    return False
 
 # Log when created and run a shell command
 class EventHandler(FileSystemEventHandler):
@@ -60,8 +98,9 @@ class EventHandler(FileSystemEventHandler):
         dataset = new_file.parts[len(self.path.parts)]
 
         # If the whole dataset has arrived, add to queue
+        # Note that we need to add a check for malformed datasets and alert the user
         if validate_folder(self.path/dataset):
-            print(f"Whole dataset detected! Adding {dataset} to queue...")
+            print(f"Valid dataset detected! Adding {dataset} to queue...")
             self.lock.acquire()
             self.queue.put(dataset)
             self.lock.release()
@@ -111,6 +150,7 @@ class ImpProcesser():
                     with open(self.input_path/dataset/"metadata.json", "r") as f:
                         config = json.loads(f.read())
 
+                    print("Creating database entry...")
                     # This should extract the orcid user from the market-storage somehow in the future
                     foldername = f"{config['name']}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
                     record = self.mongodb.insert(config["name"], foldername, config["description"], "USER", proteomics=config.get("proteomics", False))
@@ -134,10 +174,17 @@ class ImpProcesser():
                     print(e)
                     print("Skipping dataset and cleaning up artefacts...")
 
-                    # try:
-                    #     shutil.rmtree(self.staging_path/foldername)
-                    # except:
-                    #     pass
+                    # Remove generated files
+                    try:
+                        shutil.rmtree(self.staging_path/foldername)
+                    except:
+                        pass
+                    
+                    # Remove dataset from database
+                    try:
+                        record = self.mongodb.delete(record.inserted_id)
+                    except:
+                        pass
             else:
                 sleep(5)
     

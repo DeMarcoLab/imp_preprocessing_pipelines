@@ -49,6 +49,10 @@ class MongoDB():
     def update_processed(self, doc_id):
         return self.update(doc_id, obj={"$set": {"processing": False}})
 
+    # Update a dataset entry
+    def delete(self, doc_id):
+        return self.collection.update_one({"_id": doc_id})
+
 if __name__ == "__main__":
     # Load config
     with open("mongo_config.json") as file:
