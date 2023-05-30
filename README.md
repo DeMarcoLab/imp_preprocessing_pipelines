@@ -1,6 +1,36 @@
-# IMP Preprocessing
+# Integrated Microscopy and Proteomics (IMP) Backend
 
-These pipelines habe been developed to convert EM datasets (.mrc format, or image slices) to the precomputed neuroglancer format. There are two pathways:
+This repository hosts the back end code for the Integrated Microscopy and Proteomics (IMP) Platform. Other repositories include the [Landing Page](https://github.com/DeMarcoLab/cryoglancerLandingPage) and the [Cryoglancer Application](https://github.com/DeMarcoLab/IMP/tree/main), which is a modified neuroglancer viewer.
+
+The repository contains:
+- files marked `deprecated_`
+    - Deprecated code from previous iterations of the pipeline - this is kept for reference for reference for when this functionality is reimplemented and added to the existing system (files marked `deprecated_`)
+- An `environment.yml` for the python environment that the pipeline uses
+- A `Dockerfile` and `docker-compose.yml` that builds a container that processes incoming datasets
+- expressjs
+    - The backend for communicating with the Mongo database that stores the dataset metadata
+- [multiresolution-mesh-creator](https://github.com/mitchellshargreaves-monash/multiresolution-mesh-creator/tree/4979288b4ca67ccd8b50a9b8865e747f9121f19e)
+    - A submodule which the pipeline depends on
+- nginx
+    - An example NginX config and Docker for hosting datasets for the Cryoglancer viewer to access
+- passthrough_api
+    - An experiment which uses fast_api to pass through any commands to the docker container
+    - Intended for use with a Relion Docker environment in the future to allow for users to upload just the tilt series rather than a full volume
+- pipeline
+    - The code used to process IMP datasets into something that can be viewed by the platform
+
+# Archetecture
+[Data flow](/images/dataflow.png)
+
+<!-- The pipeline takes in:
+- A `metadata.json` config file
+-  -->
+
+
+
+Segmentation is also intended to be supported but has been temporarily deprecated as it is not used by the current version of [Cryoglancer](https://github.com/DeMarcoLab/cryoglancerLandingPage).
+
+There are two pathways:
 
 1) MRC file for the image available with a **list of molecules and their position/rotations.** Other values like cc can be in this table. If a .obj or .mrc image volume file is available for the individual molecules, it will be used to create duplicated objects at the correct position/rotation.
   
