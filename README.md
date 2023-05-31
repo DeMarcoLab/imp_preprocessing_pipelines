@@ -20,88 +20,70 @@ The repository contains:
 - pipeline
     - The code used to process IMP datasets into something that can be viewed by the platform
 
-# Archetecture
-[Data flow](/images/data_flow.drawio.png)
+## Archetecture
+![Data flow](/images/data_flow.drawio.png)
 
-# Pipeline
+- Prior to upload the user will prepare the volume, objects and any proteomics that they wish to share for visualisation
+- Currently the full volume must be uploaded and any object coordinates need to be processed as a .csv **in the same coordinate system**
+- The platform also supports attaching additional files to the dataset, such as tilt series or .star files along with the dataset
+- Datasets are uploaded to the IMP platform using the [MyData Client](https://github.com/mytardis/mydata)
+- The pipeline watches for new datasets to arrive using [Watchdog](https://pypi.org/project/watchdog/)
+- Datasets are processed into neuroglancer's precomuted format
+- Users are alerted by email when the processing is complete or if it has failed
+- If the dataset processed successfully it will be available for viewing using the [Cryoglancer Portal](https://cryoglancer.imp-db.cloud.edu.au/)
 
+## Dataset Input
+The pipeline expects an input folder with the following format:
+- `metadata.json`
+    - `name`: The name of the dataset - `string`
+    - `description`: The description of the dataset - `string`
+    - `parent_volume`: The filename of the parent volume - `.mrc`
+    - `object_volumes`: A list of the filenmaes of the objects - `[.mrc]`
+    - `object_coordinates`: The filename of the coordinates table - `.csv`
+    - `object_names`: A list of human readable object names - should match the length of the filenames in `object_volumes` - `[string]`
+    - `subclasses`: The names of any additional columns in the `object_coordinates` table for visualisation - `[string]`
+    - `proteomics`: A table that encodes the Majority Protein IDs and iBAQ of the dataset - `.csv`
+    - `other_files`: A list of any additional files for sharing along with the dataset `[string]`
+- `parent_volume.mrc`
+    - The volume for the objects to be placed in
+    - Take care that the coordinate system matches the object coordinates
+- `object_volumes.mrc`
+    - One or more objects to be placed in the volume
+- `object_coordinates.csv`
+    - A table of coordinates and euler angles for the objects to be placed in the parent volume
+    - Columns:
+        - Position Coordinates - `x`, `y`, `z`
+        - Euler Angles - `eux`, `euy`, `euz`
+        - Object volume filename - `mrcfile`
+        - Human readable name of the corresponding object - `name`
+        - `index` - The index of the particle as it corresponds to the object list
+        - Any additional subclasses you wish to visualise, as referenced by the list of subclasses
+- `proteomics.csv`
+    - A table of the proteomics information
+    - Columns:
+        - Majority Protein IDs
+        - iBAQ
+        - Any additional information for sharing
+            - Note that while only Majority Protein IDs and iBAQ will be shown by the IMP platform, any extra columns will still be present for browsing if the file is downloaded
+- Any other files listed
 
-<!-- The pipeline takes in:
-- A `metadata.json` config file
--  -->
+An example input dataset has been provided at `/example/object_input`
 
+## NginX
+An NginX config file to host on localhost is provided. The server has to be able to serve compressed files and overcome a few caveats with the filenames, therefore `simplehttpserver` wasn't sufficient. 
 
-
-Segmentation is also intended to be supported but has been temporarily deprecated as it is not used by the current version of [Cryoglancer](https://github.com/DeMarcoLab/cryoglancerLandingPage).
-
-There are two pathways:
-
-1) MRC file for the image available with a **list of molecules and their position/rotations.** Other values like cc can be in this table. If a .obj or .mrc image volume file is available for the individual molecules, it will be used to create duplicated objects at the correct position/rotation.
-  
-2) MRC file for the image, **as well as a class mask as MRC**. This will result in a segmentation layer for each type of class found in the file, with its individual object meshes calculated from the segmentation file. At the current stage, this does not support additional values like cc, and does not have the interactive functionalities like grouping, display meshes in an area etc. This can be used for viewing.
-
-Both ways result in a folder of ...path.../bucket/dataset/
-The contents of this folder will be hosted either locally on your computer for access with local neuroglancer, or on the web app for which the database has to be updated - It will be possible to do this step some time in the future.
-  
-
-<h4>OS Requirement</h4>
-Linux, MAC.
-WSL on Windows works, however you need to keep to the WSL file system when serving the files (and copying them to the server). Else the : in some file names will pose a problem on Windows.
-
-<h4>Software Requirements</h4>
-
-- The functions **mrc2tif** and **newstack** from ***[imod](https://bio3d.colorado.edu/imod/download.html)*** are used.
-- Python 3 and Anaconda
-- The required packages are bundled in the conda environment found in **environment.yml**
-
-<h5>For object mesh creation</h5>
-<a href="https://github.com/davidackerman/multiresolution-mesh-creator" target="_blank">Mesh creator</a>
-
-
-<h5>For local server</h5>
-A nginx config file to host on localhost is provided. The server has to be able to serve compressed files and overcome a few caveats with the filenames, therefore simplehttpserver wasn't sufficient. 
-You can install nginx on linux with 
-
-    apt-get install nginx
-
+You can install nginx on linux with:  
+```
+apt-get install nginx
+```
 or on MAC:
+```
+brew install nginx
+```
 
-    brew install nginx 
-    
-and add the config file at /etc/nginx/sites-available/ with a symlink to /etc/nginx/sites-enabled/. Edit the config file to point to the folder you want to serve. Use
-  
-    service nginx start
-  
-to start, restart if you made changes to the config file, and stop to stop. 
-Note: This should only be used as long as you want to look at the files in your browser and stopped afterwards. Of course, other services will work as well, but have to be correctly configured, refer to the nginx config to get an idea of what is necessary.
-
-<h5>Folder structure</h5>
-Please look at the two examples to understand the required folder structure. The two images below also illustrate the structure.
-
-**Pathway 1, image file with table of locations of particles as well as surface volume files**
-
-![pathway](images/object_list_structure.jpg)
-
-- Place particles.csv in annotations folder: Table contains locations/rotations/name of particles. These have to match the mrc files in templates folder
-- Templates folder: Add the available mrc files for particles here.
-- Place the image mrc file on the parent folder. The greyed out folders will be created by the script and don't have to be present.
-- Run the pipeline shell script with -p parameter pointing to the folder.
-- The result will be put in bucket/dataset folder.
-
-**Pathway 2, image file with classmask mrc present**
-
-![pathway](images/segmentationMap.jpg)
-
-- In meta folder, you can specify a labels.csv file to give human readable names to the ids found in the classmask file.
-- classmask file should be placed in segmentation folder and named such.
-- Place the image mrc file on the parent folder. The greyed out folders will be created by the script and don't have to be present.
-- Run the pipeline shell script with -p parameter pointing to the folder.
-- The result will be put in bucket/dataset folder.
-
-The content of the resulting folder is in the neuroglancer precomputed format. Our imp version of neuroglancer can read and process all the files in there when provided with the url to the folder, and will add interaction, however the raw image/segmentation/mesh data can be loaded into any neuroglancer instance  by serving it and then pointing to the URL at the source panel of the web app.
-
-Please check the examples folder structure in this repository to understand where to put what for input.
-
-<h5>To run</h5>
-
-    bash ./pipeline.sh -p path/to/folder/containing/mrcFile
+Add the config file at `/etc/nginx/sites-available/` with a symlink to `/etc/nginx/sites-enabled/`. Edit the config file to point to the folder you want to serve. Useful commands for management include:
+```  
+service nginx start
+service nginx restart
+service nginx stop
+```
