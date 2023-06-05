@@ -55,12 +55,12 @@ RUN pip install ./multiresolution-mesh-creator && \
     rm multiresolution-mesh-creator -r
 
 # Install IMP packages
-COPY environment-clean.yml .
-RUN micromamba install --name base --file environment-clean.yml && \
+COPY environment.yml .
+RUN micromamba install --name base --file environment.yml && \
     micromamba clean -a -y && \
     # conda update --all && \
     # conda clean -a -y && \
-    rm environment-clean.yml
+    rm environment.yml
 
 RUN micromamba shell init -s bash -p ~/micromamba
 

@@ -8,9 +8,10 @@ services:
       dockerfile: Dockerfile
     tty: true
     volumes:
-      - /market-file/datasets:/remote/input
+      - /market-file/input:/remote/input
       - /market-file/staging:/remote/staging
       - /home/ubuntu/workspace/preprocessing/pipeline/mongo_config.json:/app/mongo_config.json
+      - /home/ubuntu/workspace/preprocessing/pipeline/qat_config.json:/app/qat_config.json
       - /imp-data/folderhost/:/hosting
     entrypoint: >
-      sh -c "/usr/local/bin/_entrypoint.sh python processor.py /remote/input /remote/staging /hosting /app/mongo_config.json -t"
+      sh -c "/usr/local/bin/_entrypoint.sh python processor.py /remote/input /remote/staging /hosting /app/mongo_config.json /app/qat_config.json -t"
