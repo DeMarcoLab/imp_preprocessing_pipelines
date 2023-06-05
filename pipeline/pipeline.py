@@ -366,6 +366,7 @@ def pipeline(input_path, staging_path, test=False):
     # particles = extract_objects(config, header, staging_path/"particles.csv", input_path)
 
     # Load particles
+    shutil.copy(input_path/config["object_coordinates"], staging_path/"particles.csv")
     particles = pd.read_csv(input_path/config["object_coordinates"])
 
     print("Annotating objects...")
@@ -383,9 +384,9 @@ def pipeline(input_path, staging_path, test=False):
         subprocess.Popen(f"create-multiresolution-meshes {objects_path/name} -n {joblib.cpu_count()}", shell=True).wait()
 
         print("Transferring mesh...")
-        multi_mesh = [file for file in os.listdir(objects_path) if file.startswith(str(name + "-"))] 
+        multi_mesh = [file for file in os.listdir(objects_path) if file.startswith(f"{name}-")] 
         multi_mesh.sort()
-        shutil.copytree(objects_path/multi_mesh[-1], coordinates_path/(name + ".mesh"))
+        shutil.copytree(objects_path/multi_mesh[-1]/"meshes"/"multires", coordinates_path/(name + ".mesh"))
 
         print(f"{name} ({volume}) completed")
 

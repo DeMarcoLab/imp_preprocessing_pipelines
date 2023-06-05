@@ -1,5 +1,7 @@
 {
     "username": "USERNAME",
     "api_key":  "API_KEY",
-    "server": "https://URL.TO.QAT.API:PORT"
+    "server": "https://URL.TO.QAT.API:PORT",
+    "sender": "EMAIL@DOMAIN.com",
+    "password": "PASSWORD"
 }

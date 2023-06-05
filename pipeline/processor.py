@@ -11,7 +11,6 @@ import threading
 from queue import Queue
 from time import sleep
 from datetime import datetime
-
 from pathlib import Path
 
 # from watchdog.observers import Observer
@@ -20,6 +19,7 @@ from watchdog.events import FileSystemEventHandler
 
 from pipeline import pipeline
 from mongo import MongoDB
+from qat_api import QatAPI
 
 # Set logging config
 logging.basicConfig(level=logging.INFO,
@@ -100,6 +100,7 @@ class EventHandler(FileSystemEventHandler):
         # If the whole dataset has arrived, add to queue
         # Note that we need to add a check for malformed datasets and alert the user
         if validate_folder(self.path/dataset):
+            self.qat.email_received(dataset)
             print(f"Valid dataset detected! Adding {dataset} to queue...")
             self.lock.acquire()
             self.queue.put(dataset)
@@ -108,7 +109,7 @@ class EventHandler(FileSystemEventHandler):
 
 # Class to handle processing of IMP workloads
 class ImpProcesser():
-    def __init__(self, input_path, staging_path, hosting_path, mongo_config, test=False):
+    def __init__(self, input_path, staging_path, hosting_path, mongo_config, qat_config, test=False):
         # Set paths
         self.input_path = Path(input_path)
         self.staging_path = Path(staging_path)
@@ -126,6 +127,10 @@ class ImpProcesser():
         # DB
         with open(mongo_config) as file:
             self.mongodb = MongoDB(json.load(file))
+        
+        # API
+        with open(qat_config) as file:
+            self.qat = QatAPI(json.load(file))
 
         # Populate list of inputs
         self.populate()
@@ -136,6 +141,7 @@ class ImpProcesser():
         for dataset in os.listdir(self.input_path):
             if validate_folder(self.input_path/dataset):
                 self.queue.put(dataset)
+                self.qat.email_received(dataset)
     
     def queueHandler(self):
         while self.cont:
@@ -153,25 +159,30 @@ class ImpProcesser():
                     print("Creating database entry...")
                     # This should extract the orcid user from the market-storage somehow in the future
                     foldername = f"{config['name']}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-                    record = self.mongodb.insert(config["name"], foldername, config["description"], "USER", proteomics=config.get("proteomics", False))
+                    record = self.mongodb.insert(config["name"], foldername, config["description"], config["orcid"], proteomics=config.get("proteomics", False))
 
                     print("Running pipeline...")
                     pipeline(self.input_path/dataset, self.staging_path/foldername, test=self.test)
 
                     print(f"Making dataset available over web...")
                     shutil.copytree(self.staging_path/foldername, self.hosting_path/foldername)
+                    input_files = [config["parent_volume"]] + config["object_volumes"] + config["other_files"]
+                    for file in input_files:
+                        shutil.copy(self.input_path/dataset/file, self.hosting_path/foldername/file)
                     self.mongodb.update_processed(record.inserted_id)
                     
                     print(f"Cleaning up...")
-                    # shutil.rmtree(self.staging_path/foldername)
+                    shutil.rmtree(self.staging_path/foldername)
                     if not self.test:
                         shutil.rmtree(self.input_path/dataset)
                     
+                    self.qat.email_completed(dataset)
                     print(f"Processing of {dataset} complete!")
 
                 except Exception as e:
                     print("Dataset corrupted!")
                     print(e)
+                    self.qat.email_corrupted(dataset, e)
                     print("Skipping dataset and cleaning up artefacts...")
 
                     # Remove generated files
@@ -221,10 +232,11 @@ if __name__ == "__main__":
     parser.add_argument("staging_path")
     parser.add_argument("hosting_path")
     parser.add_argument("mongo_config")
+    parser.add_argument("qat_config")
     parser.add_argument("-t", "--test", action="store_true",
                         help="Test the pipeline using only the 'head' of the particle table without cleaning up any generated files.")
     args = parser.parse_args()
 
     # Init and Run processor
-    imp = ImpProcesser(args.input_path, args.staging_path, args.hosting_path, args.mongo_config, test=args.test)
+    imp = ImpProcesser(args.input_path, args.staging_path, args.hosting_path, args.mongo_config, args.qat_config, test=args.test)
     imp.run()
