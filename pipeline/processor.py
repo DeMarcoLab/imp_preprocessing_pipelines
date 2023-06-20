@@ -20,6 +20,7 @@ from watchdog.events import FileSystemEventHandler
 from pipeline import pipeline
 from mongo import MongoDB
 from qat_api import QatAPI
+from doi_api import DoiAPI
 
 # Set logging config
 logging.basicConfig(level=logging.INFO,
@@ -109,7 +110,7 @@ class EventHandler(FileSystemEventHandler):
 
 # Class to handle processing of IMP workloads
 class ImpProcesser():
-    def __init__(self, input_path, staging_path, hosting_path, mongo_config, qat_config, test=False):
+    def __init__(self, input_path, staging_path, hosting_path, mongo_config, qat_config, doi_config, test=False):
         # Set paths
         self.input_path = Path(input_path)
         self.staging_path = Path(staging_path)
@@ -128,9 +129,13 @@ class ImpProcesser():
         with open(mongo_config) as file:
             self.mongodb = MongoDB(json.load(file))
         
-        # API
+        # QAT
         with open(qat_config) as file:
             self.qat = QatAPI(json.load(file))
+
+        # DOI
+        with open(doi_config) as file:
+            self.doi = DoiAPI(json.load(file))
 
         # Populate list of inputs
         self.populate()
@@ -152,7 +157,6 @@ class ImpProcesser():
                     self.lock.release()
 
                     print(f"Processing {dataset}")
-                    print("Creating database entry...")
                     with open(self.input_path/dataset/"metadata.json", "r") as f:
                         config = json.loads(f.read())
 
@@ -175,6 +179,15 @@ class ImpProcesser():
                     shutil.rmtree(self.staging_path/foldername)
                     if not self.test:
                         shutil.rmtree(self.input_path/dataset)
+                    
+                    print(f"Minting doi...")
+                    res = self.doi.mint({
+                        "id": record.inserted_id,
+                        "url": f'{self.mongodb.config["file_host"]}/{foldername}/',
+                        "attributes": config["doi_attributes"]
+                    })
+                    if "errors" in res:
+                        raise Exception(f"DOI was not minted successfully. Error response from server: {res['errors']}")
                     
                     self.qat.email_completed(dataset)
                     print(f"Processing of {dataset} complete!")
@@ -233,10 +246,11 @@ if __name__ == "__main__":
     parser.add_argument("hosting_path")
     parser.add_argument("mongo_config")
     parser.add_argument("qat_config")
+    parser.add_argument("doi_config")
     parser.add_argument("-t", "--test", action="store_true",
                         help="Test the pipeline using only the 'head' of the particle table without cleaning up any generated files.")
     args = parser.parse_args()
 
     # Init and Run processor
-    imp = ImpProcesser(args.input_path, args.staging_path, args.hosting_path, args.mongo_config, args.qat_config, test=args.test)
+    imp = ImpProcesser(args.input_path, args.staging_path, args.hosting_path, args.mongo_config, args.qat_config, args.doi_config, test=args.test)
     imp.run()

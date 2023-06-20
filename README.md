@@ -44,6 +44,20 @@ The pipeline expects an input folder with the following format:
     - `subclasses`: The names of any additional columns in the `object_coordinates` table for visualisation - `[string]`
     - `proteomics`: A table that encodes the Majority Protein IDs and iBAQ of the dataset - `.csv`
     - `other_files`: A list of any additional files for sharing along with the dataset `[string]`
+    - `orcid`: Your ORCiD in "0123-4567-8901-2345" format `[string]`
+    - `doi_attributes`: The attributes of the doi for minting `[json]`
+        ```
+        "doi_attributes": {
+            "creators": [{
+                "name": "Your research group"
+            }],
+            "titles": [{
+                "title": "Test Dataset"
+            }],
+            "publisher": "IMP Platform",
+            "publication_year": 2023
+        }
+        ```
 - `parent_volume.mrc`
     - The volume for the objects to be placed in
     - Take care that the coordinate system matches the object coordinates
